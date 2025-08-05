@@ -39,7 +39,7 @@ print_error() {
 # Function to check AWS credentials
 check_aws_credentials() {
     print_status "Checking AWS credentials..."
-    if ! $AWS_CMD sts get-caller-identity &> /dev/null; then
+    if ! $AWS_CMD sts get-caller-identity > /dev/null 2>&1; then
         print_error "AWS credentials not configured"
         exit 1
     fi

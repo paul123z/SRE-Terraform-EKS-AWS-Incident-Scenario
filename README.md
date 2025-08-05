@@ -1,6 +1,6 @@
 # SRE Terraform EKS AWS Incident Scenario
 
-A comprehensive SRE (Site Reliability Engineering) demonstration project that showcases infrastructure provisioning, application deployment, monitoring, and incident response using AWS EKS, Terraform, Helm, and GitHub Actions.
+A comprehensive open-source project designed for the SRE, DevOps, and Cloud community to learn and practice real-world incident response, infrastructure management, and monitoring in a production-like AWS EKS environment. This project showcases modern cloud-native practices using AWS EKS, Terraform, Helm, and GitHub Actions.
 
 ## 🏗️ Architecture Overview
 
@@ -22,7 +22,7 @@ A comprehensive SRE (Site Reliability Engineering) demonstration project that sh
 
 ## 📋 Project Setup Components
 
-This SRE demonstration project consists of several interconnected components, each serving a specific purpose in creating a realistic production-like environment for incident response training and infrastructure management practice.
+This open-source SRE project consists of several interconnected components, each serving a specific purpose in creating a realistic production-like environment for incident response training and infrastructure management practice. Designed for the SRE, DevOps, and Cloud community to learn and share knowledge.
 
 ### 🏗️ **Infrastructure Setup (Terraform)**
 **Purpose**: Creates the foundational AWS infrastructure needed to run the application and monitoring stack.
@@ -461,7 +461,7 @@ helm uninstall prometheus -n monitoring
 
 ## 📚 Learning Objectives
 
-This project demonstrates:
+This open-source project demonstrates modern cloud-native practices:
 
 1. **Infrastructure as Code**: Terraform for AWS resources
 2. **Container Orchestration**: Kubernetes/EKS deployment
@@ -474,11 +474,19 @@ This project demonstrates:
 
 ## 🤝 Contributing
 
+This is an open-source project for the SRE, DevOps, and Cloud community. We welcome contributions!
+
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
 4. Test thoroughly
 5. Submit a pull request
+
+### Community Guidelines
+- Follow best practices for SRE and DevOps
+- Add comprehensive documentation for new features
+- Include tests and validation scripts
+- Consider cost implications for the community
 
 ## 📄 License
 
@@ -490,8 +498,8 @@ For issues and questions:
 1. Check the troubleshooting section
 2. Review the logs and metrics
 3. Open an issue on GitHub
-4. Contact the DevOps team
+4. Join the community discussions
 
 ---
 
-**Note**: This is a demonstration project. For production use, implement proper security, backup, and disaster recovery procedures. 
+**Note**: This is an open-source learning project designed for the SRE, DevOps, and Cloud community. For production use, implement proper security, backup, and disaster recovery procedures. 

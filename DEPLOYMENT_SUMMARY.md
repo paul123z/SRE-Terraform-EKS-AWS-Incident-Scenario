@@ -2,7 +2,7 @@
 
 ## 🎯 Project Overview
 
-This is a complete SRE (Site Reliability Engineering) demonstration project that showcases:
+This is a complete open-source SRE (Site Reliability Engineering) project designed for the community that showcases:
 
 - **Infrastructure as Code**: Terraform for AWS EKS
 - **Application Deployment**: Node.js app with Helm charts
@@ -276,4 +276,4 @@ helm uninstall prometheus -n monitoring
 
 ---
 
-**🎉 Congratulations!** You now have a complete SRE demonstration environment ready for learning and experimentation. 
+**🎉 Congratulations!** You now have a complete open-source SRE environment ready for learning, experimentation, and community contribution. 

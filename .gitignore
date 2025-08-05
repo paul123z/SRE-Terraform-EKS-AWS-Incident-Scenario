@@ -1,2 +1,41 @@
+# AWS CLI and credentials
 aws/
 zips/
+
+# Terraform files
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# Environment variables and secrets
+.env
+*.env
+secrets/
+
+# Logs
+*.log
+logs/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Node.js (if any)
+node_modules/
+npm-debug.log*
+
+# Temporary files
+*.tmp
+*.temp

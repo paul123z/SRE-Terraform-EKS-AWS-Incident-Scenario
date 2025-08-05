@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # SRE Incident Simulator Script
-# This script simulates various failure scenarios for demonstration purposes
+# This script simulates various failure scenarios for SRE training and learning purposes
 
 set -e
 
