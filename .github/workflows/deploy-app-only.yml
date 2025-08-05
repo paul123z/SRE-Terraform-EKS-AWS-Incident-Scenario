@@ -1,13 +1,7 @@
 name: Deploy Application Only
 
 on:
-  workflow_dispatch:  # Manual trigger
-  push:
-    branches: [ main ]
-    paths:
-      - 'app/**'
-      - 'helm/**'
-      - '.github/workflows/deploy-app-only.yml'
+  workflow_dispatch:  # Manual trigger only
 
 env:
   AWS_REGION: eu-central-1
