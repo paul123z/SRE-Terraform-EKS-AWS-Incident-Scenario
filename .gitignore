@@ -7,6 +7,7 @@ zips/
 *.tfstate.*
 .terraform/
 .terraform.lock.hcl
+terraform/.terraform/
 
 # Environment variables and secrets
 .env
