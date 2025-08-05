@@ -1,0 +1,71 @@
+name: Deploy Application Only
+
+on:
+  workflow_dispatch:  # Manual trigger
+  push:
+    branches: [ main ]
+    paths:
+      - 'app/**'
+      - 'helm/**'
+      - '.github/workflows/deploy-app-only.yml'
+
+env:
+  AWS_REGION: eu-central-1
+  CLUSTER_NAME: sre-incident-demo-cluster
+  APP_NAME: sre-demo-app
+  ECR_REPOSITORY: sre-demo-app
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+        
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+      
+    - name: Update kubeconfig
+      run: |
+        aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.CLUSTER_NAME }}
+        
+    - name: Deploy application with Helm
+      run: |
+        # Get the latest image tag from ECR
+        LATEST_IMAGE=$(aws ecr describe-images \
+          --repository-name ${{ env.ECR_REPOSITORY }} \
+          --region ${{ env.AWS_REGION }} \
+          --query 'imageDetails[?imageTags[?contains(@, `latest`)]].imageTags[0]' \
+          --output text)
+        
+        # Deploy using Helm
+        helm upgrade --install ${{ env.APP_NAME }} ./helm/sre-demo-app \
+          --set image.repository=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }} \
+          --set image.tag=latest \
+          --namespace default \
+          --wait \
+          --timeout 5m
+          
+    - name: Verify deployment
+      run: |
+        kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=${{ env.APP_NAME }} --timeout=300s
+        kubectl get pods -l app.kubernetes.io/name=${{ env.APP_NAME }}
+        kubectl get svc ${{ env.APP_NAME }}
+        
+    - name: Show deployment info
+      run: |
+        echo "✅ Application deployed successfully!"
+        echo "🌐 Service URL:"
+        kubectl get svc ${{ env.APP_NAME }} -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+        echo ""
+        echo "📊 Pod status:"
+        kubectl get pods -l app.kubernetes.io/name=${{ env.APP_NAME }} 

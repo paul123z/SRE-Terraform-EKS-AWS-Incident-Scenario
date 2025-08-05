@@ -98,6 +98,28 @@ cleanup_ecr() {
     fi
 }
 
+# Function to clean up EBS CSI Driver
+cleanup_ebs_csi_driver() {
+    print_status "Cleaning up EBS CSI Driver..."
+    
+    if check_kubectl_config; then
+        # Remove EBS CSI Driver
+        helm uninstall aws-ebs-csi-driver -n kube-system || true
+        
+        # Remove IAM policy from node group role
+        NODE_GROUP_NAME=$(aws eks list-nodegroups --cluster-name $CLUSTER_NAME --region $AWS_REGION --query 'nodegroups[0]' --output text 2>/dev/null || echo "")
+        if [ -n "$NODE_GROUP_NAME" ]; then
+            NODE_GROUP_ROLE=$(aws eks describe-nodegroup --cluster-name $CLUSTER_NAME --nodegroup-name $NODE_GROUP_NAME --region $AWS_REGION --query 'nodegroup.nodeRole' --output text | cut -d'/' -f2)
+            aws iam detach-role-policy --role-name $NODE_GROUP_ROLE --policy-arn arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy || true
+            print_success "EBS CSI Driver cleaned up"
+        else
+            print_status "Node group not found, skipping EBS CSI Driver cleanup"
+        fi
+    else
+        print_status "kubectl not configured, skipping EBS CSI Driver cleanup"
+    fi
+}
+
 # Function to destroy infrastructure
 destroy_infrastructure() {
     print_status "Destroying infrastructure with Terraform..."
@@ -153,6 +175,7 @@ show_cleanup_summary() {
     echo "✅ IAM roles and policies"
     echo "✅ Application deployment"
     echo "✅ Monitoring stack (Prometheus/Grafana)"
+    echo "✅ EBS CSI Driver and IAM policies"
     echo "✅ ECR repository and images"
     echo "✅ Local Terraform state files"
     echo ""
@@ -190,6 +213,9 @@ main() {
     
     # Clean up ECR
     cleanup_ecr
+    
+    # Clean up EBS CSI Driver
+    cleanup_ebs_csi_driver
     
     # Destroy infrastructure
     destroy_infrastructure

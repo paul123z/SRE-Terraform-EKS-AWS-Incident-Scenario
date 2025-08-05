@@ -76,6 +76,7 @@ check_prerequisites() {
         exit 1
     fi
     
+    # Note: Node.js will be installed in Docker container, so we don't need it locally
     print_success "All prerequisites are satisfied"
 }
 
@@ -173,17 +174,48 @@ deploy_application() {
 setup_monitoring() {
     print_status "Setting up monitoring..."
     
+    # Install EBS CSI Driver for persistent volume support
+    print_status "Installing EBS CSI Driver..."
+    
+    # Remove existing EBS CSI Driver if installed with kubectl
+    kubectl delete -k "github.com/kubernetes-sigs/aws-ebs-csi-driver/deploy/kubernetes/overlays/stable/?ref=release-1.28" || true
+    
+    # Add AWS EBS CSI Driver Helm repository
+    helm repo add aws-ebs-csi-driver https://kubernetes-sigs.github.io/aws-ebs-csi-driver
+    helm repo update
+    
+    # Install EBS CSI Driver using Helm
+    helm upgrade --install aws-ebs-csi-driver aws-ebs-csi-driver/aws-ebs-csi-driver \
+        --namespace kube-system \
+        --wait \
+        --timeout 5m
+    
+    # Wait for EBS CSI Driver to be ready
+    print_status "Waiting for EBS CSI Driver to be ready..."
+    kubectl wait --for=condition=ready pod -l app=ebs-csi-controller -n kube-system --timeout=300s
+    
+    # Get the node group name dynamically
+    print_status "Adding EBS CSI Driver permissions to node group..."
+    NODE_GROUP_NAME=$(aws eks list-nodegroups --cluster-name $CLUSTER_NAME --region $AWS_REGION --query 'nodegroups[0]' --output text)
+    NODE_GROUP_ROLE=$(aws eks describe-nodegroup --cluster-name $CLUSTER_NAME --nodegroup-name $NODE_GROUP_NAME --region $AWS_REGION --query 'nodegroup.nodeRole' --output text | cut -d'/' -f2)
+    
+    # Attach EBS CSI Driver policy to node group role
+    aws iam attach-role-policy --role-name $NODE_GROUP_ROLE --policy-arn arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy
+    
+    print_status "EBS CSI Driver setup completed"
+    
     # Add Prometheus Helm repository
     helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
     helm repo update
     
     # Install Prometheus with Grafana
+    print_status "Installing Prometheus and Grafana..."
     helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
         -f monitoring/prometheus-values.yaml \
         --namespace monitoring \
         --create-namespace \
         --wait \
-        --timeout 10m
+        --timeout 15m
     
     print_success "Monitoring setup completed"
 }

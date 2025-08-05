@@ -17,6 +17,14 @@ spec:
       annotations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- if .Values.monitoring.enabled }}
+      {{- if .Values.monitoring.podMonitor.enabled }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "3000"
+        prometheus.io/path: "/metrics"
+      {{- end }}
+      {{- end }}
       labels:
         {{- include "sre-demo-app.selectorLabels" . | nindent 8 }}
     spec:
@@ -60,15 +68,6 @@ spec:
             {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
-          {{- if .Values.monitoring.enabled }}
-          {{- if .Values.monitoring.podMonitor.enabled }}
-          # Prometheus annotations for pod monitoring
-          annotations:
-            prometheus.io/scrape: "true"
-            prometheus.io/port: "3000"
-            prometheus.io/path: "/metrics"
-          {{- end }}
-          {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

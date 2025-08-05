@@ -20,6 +20,117 @@ A comprehensive SRE (Site Reliability Engineering) demonstration project that sh
 └─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
 
+## 📋 Project Setup Components
+
+This SRE demonstration project consists of several interconnected components, each serving a specific purpose in creating a realistic production-like environment for incident response training and infrastructure management practice.
+
+### 🏗️ **Infrastructure Setup (Terraform)**
+**Purpose**: Creates the foundational AWS infrastructure needed to run the application and monitoring stack.
+
+**What it sets up**:
+- **VPC with Public/Private Subnets**: Creates a secure network topology with public subnets for load balancers and private subnets for application pods
+- **EKS Cluster**: Provisions a Kubernetes cluster with managed node groups using t3.medium instances for cost optimization
+- **IAM Roles & Policies**: Configures necessary permissions for EKS nodes to pull images from ECR and manage networking
+- **Single NAT Gateway**: Reduces costs while providing internet access to private subnets
+- **Auto-scaling Node Groups**: Allows the cluster to scale between 1-3 nodes based on demand
+
+**Key Benefits**: 
+- Infrastructure as Code (IaC) approach ensures reproducible deployments
+- Cost-optimized configuration suitable for learning and demos
+- Production-ready security with proper network isolation
+
+### 🐳 **Application Setup (Docker + Node.js)**
+**Purpose**: Provides a realistic application with built-in failure modes for incident simulation.
+
+**What it includes**:
+- **Express.js Web Server**: Simple but realistic application with health checks and API endpoints
+- **Failure Simulation Endpoints**: Built-in mechanisms to simulate various failure scenarios:
+  - Health check failures (503 errors)
+  - Slow response times (timeout scenarios)
+  - Memory leaks (gradual memory consumption)
+  - CPU stress (high resource utilization)
+- **External API Integration**: Simulates real-world dependencies with external service calls
+- **Monitoring Endpoints**: Exposes metrics for Prometheus scraping
+
+**Key Benefits**:
+- Realistic application behavior for incident response training
+- Controllable failure modes for systematic testing
+- Lightweight and fast deployment
+
+### 🎯 **Deployment Setup (Helm Charts)**
+**Purpose**: Manages the Kubernetes deployment with production-like configurations.
+
+**What it configures**:
+- **Multi-replica Deployment**: Runs 2 replicas by default with auto-scaling capabilities
+- **Load Balancer Service**: Exposes the application externally with proper load balancing
+- **Resource Limits**: Sets CPU and memory constraints to prevent resource exhaustion
+- **Health Checks**: Configures liveness and readiness probes for Kubernetes orchestration
+- **Horizontal Pod Autoscaler (HPA)**: Automatically scales pods based on CPU/memory usage
+- **Service Monitor**: Enables Prometheus to scrape application metrics
+
+**Key Benefits**:
+- Production-ready deployment configuration
+- Built-in high availability and auto-scaling
+- Proper resource management and monitoring integration
+
+### 🔍 **Monitoring Setup (Prometheus + Grafana)**
+**Purpose**: Provides comprehensive observability and alerting capabilities.
+
+**What it deploys**:
+- **Prometheus Server**: Collects and stores time-series metrics from the application and Kubernetes
+- **Grafana Dashboards**: Pre-configured dashboards for application health, resource usage, and error rates
+- **Alert Manager**: Handles alert routing and notification management
+- **Custom Dashboards**: SRE-specific dashboards showing application health, pod status, and resource utilization
+- **7-day Retention**: Optimized storage configuration for demo purposes
+
+**Key Benefits**:
+- Complete observability stack for incident detection
+- Pre-built dashboards for quick monitoring setup
+- Cost-optimized storage and resource allocation
+
+### 🔄 **CI/CD Setup (GitHub Actions)**
+**Purpose**: Automates the build, test, and deployment process for continuous delivery.
+
+**What it automates**:
+- **Testing Phase**: Runs Node.js tests to validate application functionality
+- **Build Phase**: Creates Docker images and pushes them to AWS ECR
+- **Deployment Phase**: Uses Helm to deploy updated applications to EKS
+- **Verification**: Checks deployment status and application health
+- **Multi-environment Support**: Can be extended for staging/production environments
+
+**Key Benefits**:
+- Automated deployment pipeline reduces human error
+- Consistent deployment process across environments
+- Built-in testing and validation steps
+
+### 🚨 **Incident Simulation Setup (Scripts)**
+**Purpose**: Provides tools and scenarios for realistic incident response training.
+
+**What it includes**:
+- **Automated Incident Scripts**: Pre-built scenarios for common failure modes
+- **Manual Control Endpoints**: API endpoints to trigger specific failure conditions
+- **Incident Walkthroughs**: Step-by-step guides for detection, diagnosis, and resolution
+- **Monitoring Integration**: Alerts and dashboards that respond to simulated incidents
+
+**Key Benefits**:
+- Realistic training environment for SRE teams
+- Repeatable incident scenarios for consistent learning
+- Integration with real monitoring and alerting systems
+
+### 🛠️ **Utility Scripts Setup**
+**Purpose**: Provides automation for common operational tasks.
+
+**What it includes**:
+- **Deployment Scripts**: Automated setup of the entire environment
+- **Teardown Scripts**: Clean removal of all resources to avoid costs
+- **Incident Simulator**: Automated triggering of various failure scenarios
+- **Health Check Scripts**: Validation of deployment and application status
+
+**Key Benefits**:
+- One-command deployment and teardown
+- Automated incident simulation for training
+- Consistent environment setup across team members
+
 ## 🚀 Quick Start
 
 ### Prerequisites
@@ -139,6 +250,54 @@ curl -X POST http://<service-url>/api/memory-leak \
 curl -X POST http://<service-url>/api/failure-mode \
   -H "Content-Type: application/json" \
   -d '{"mode": "none"}'
+```
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+#### Prometheus/Grafana Pods Stuck in Pending
+If you see Prometheus or Grafana pods stuck in `Pending` status with volume binding errors:
+
+```bash
+# Check PVC status
+kubectl get pvc -n monitoring
+
+# Check pod events
+kubectl describe pod prometheus-grafana-<hash> -n monitoring
+```
+
+**Solution**: The deployment script automatically installs the EBS CSI Driver and configures IAM permissions. If you encounter this issue manually:
+
+```bash
+# Install EBS CSI Driver
+helm repo add aws-ebs-csi-driver https://kubernetes-sigs.github.io/aws-ebs-csi-driver
+helm repo update
+helm upgrade --install aws-ebs-csi-driver aws-ebs-csi-driver/aws-ebs-csi-driver --namespace kube-system
+
+# Get node group role and attach policy
+NODE_GROUP_NAME=$(aws eks list-nodegroups --cluster-name sre-incident-demo-cluster --region eu-central-1 --query 'nodegroups[0]' --output text)
+NODE_GROUP_ROLE=$(aws eks describe-nodegroup --cluster-name sre-incident-demo-cluster --nodegroup-name $NODE_GROUP_NAME --region eu-central-1 --query 'nodegroup.nodeRole' --output text | cut -d'/' -f2)
+aws iam attach-role-policy --role-name $NODE_GROUP_ROLE --policy-arn arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy
+```
+
+#### Application Pods Not Starting
+If your application pods are not starting:
+
+```bash
+# Check pod status
+kubectl get pods -l app.kubernetes.io/name=sre-demo-app
+
+# Check pod events
+kubectl describe pod <pod-name>
+
+# Check service account
+kubectl get serviceaccount sre-demo-app
+```
+
+**Solution**: Create the missing service account:
+```bash
+kubectl create serviceaccount sre-demo-app
 ```
 
 ## 🔍 Incident Response Walkthrough
