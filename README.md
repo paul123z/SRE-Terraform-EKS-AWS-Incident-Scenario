@@ -46,7 +46,7 @@ terraform plan
 terraform apply
 
 # Get cluster info
-aws eks update-kubeconfig --region us-east-1 --name sre-incident-demo-cluster
+aws eks update-kubeconfig --region eu-central-1 --name sre-incident-demo-cluster
 ```
 
 ### 2. Application Deployment
@@ -55,13 +55,13 @@ aws eks update-kubeconfig --region us-east-1 --name sre-incident-demo-cluster
 # Build and push the application image
 cd app
 docker build -t sre-demo-app .
-docker tag sre-demo-app:latest <your-aws-account>.dkr.ecr.us-east-1.amazonaws.com/sre-demo-app:latest
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <your-aws-account>.dkr.ecr.us-east-1.amazonaws.com
-docker push <your-aws-account>.dkr.ecr.us-east-1.amazonaws.com/sre-demo-app:latest
+docker tag sre-demo-app:latest <your-aws-account>.dkr.ecr.eu-central-1.amazonaws.com/sre-demo-app:latest
+aws ecr get-login-password --region eu-central-1 | docker login --username AWS --password-stdin <your-aws-account>.dkr.ecr.eu-central-1.amazonaws.com
+docker push <your-aws-account>.dkr.ecr.eu-central-1.amazonaws.com/sre-demo-app:latest
 
 # Deploy using Helm
 cd ../helm/sre-demo-app
-helm install sre-demo-app . --set image.repository=<your-aws-account>.dkr.ecr.us-east-1.amazonaws.com/sre-demo-app
+helm install sre-demo-app . --set image.repository=<your-aws-account>.dkr.ecr.eu-central-1.amazonaws.com/sre-demo-app
 ```
 
 ### 3. Monitoring Setup

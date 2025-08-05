@@ -86,6 +86,8 @@ kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80
 - **Username**: admin
 - **Password**: <GRAFANA_PASSWORD>
 
+**Note**: This demo is configured for eu-central-1 (Frankfurt) region
+
 **Check These Dashboards**:
 - Application Health Status
 - Pod Restart Count

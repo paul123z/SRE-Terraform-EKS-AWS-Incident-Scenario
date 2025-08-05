@@ -45,7 +45,7 @@ kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80
 
 ### Infrastructure (Terraform)
 - **VPC**: 10.0.0.0/16 with public/private subnets
-- **EKS Cluster**: Kubernetes 1.28 with t3.medium nodes
+- **EKS Cluster**: Kubernetes 1.28 with t3.medium nodes (eu-central-1)
 - **IAM Roles**: Node group and cluster access
 - **Security Groups**: Proper network isolation
 - **Cost Optimized**: Single NAT Gateway, minimal resources
@@ -135,14 +135,14 @@ kubectl rollout status deployment sre-demo-app
 
 ## 💰 Cost Breakdown
 
-### Monthly Estimated Costs
-- **EKS Control Plane**: $73.00
-- **EC2 Instances (t3.medium)**: $30.00
-- **Load Balancer**: $18.00
-- **NAT Gateway**: $45.00
-- **Data Transfer**: $5.00
-- **Storage (EBS)**: $10.00
-- **Total**: ~$181.00/month
+### Monthly Estimated Costs (eu-central-1)
+- **EKS Control Plane**: €67.00
+- **EC2 Instances (t3.medium)**: €28.00
+- **Load Balancer**: €16.00
+- **NAT Gateway**: €41.00
+- **Data Transfer**: €5.00
+- **Storage (EBS)**: €9.00
+- **Total**: ~€166.00/month
 
 ### Cost Optimization Features
 - Single NAT Gateway (vs multiple)

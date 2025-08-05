@@ -7,7 +7,7 @@ on:
     branches: [ main ]
 
 env:
-  AWS_REGION: us-east-1
+  AWS_REGION: eu-central-1
   EKS_CLUSTER_NAME: sre-incident-demo-cluster
   ECR_REPOSITORY: sre-demo-app
 
@@ -81,7 +81,7 @@ jobs:
         aws-region: ${{ env.AWS_REGION }}
     
     - name: Update kubeconfig
-      run: aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.EKS_CLUSTER_NAME }}
+      run: aws eks update-kubeconfig --region eu-central-1 --name ${{ env.EKS_CLUSTER_NAME }}
     
     - name: Install Helm
       uses: azure/setup-helm@v3

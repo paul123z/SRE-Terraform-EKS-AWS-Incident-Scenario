@@ -13,7 +13,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-AWS_REGION="us-east-1"
+AWS_REGION="eu-central-1"
 CLUSTER_NAME="sre-incident-demo-cluster"
 ECR_REPOSITORY="sre-demo-app"
 APP_NAME="sre-demo-app"
