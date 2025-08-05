@@ -1,0 +1,127 @@
+# Prometheus configuration for SRE Demo
+prometheus:
+  prometheusSpec:
+    retention: 7d
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: gp2
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 10Gi
+    resources:
+      requests:
+        memory: 256Mi
+        cpu: 250m
+      limits:
+        memory: 512Mi
+        cpu: 500m
+
+alertmanager:
+  alertmanagerSpec:
+    retention: 120h
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: gp2
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 5Gi
+    resources:
+      requests:
+        memory: 128Mi
+        cpu: 100m
+      limits:
+        memory: 256Mi
+        cpu: 200m
+
+grafana:
+  enabled: true
+  adminPassword: <GRAFANA_PASSWORD>
+  persistence:
+    enabled: true
+    storageClassName: gp2
+    size: 5Gi
+  resources:
+    requests:
+      memory: 128Mi
+      cpu: 100m
+    limits:
+      memory: 256Mi
+      cpu: 200m
+  service:
+    type: LoadBalancer
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: 'default'
+          orgId: 1
+          folder: ''
+          type: file
+          disableDeletion: false
+          editable: true
+          options:
+            path: /var/lib/grafana/dashboards/default
+  dashboards:
+    default:
+      sre-demo-dashboard:
+        json: |
+          {
+            "dashboard": {
+              "id": null,
+              "title": "SRE Demo Dashboard",
+              "tags": ["sre", "demo"],
+              "timezone": "browser",
+              "panels": [
+                {
+                  "id": 1,
+                  "title": "Application Health",
+                  "type": "stat",
+                  "targets": [
+                    {
+                      "expr": "up{app=\"sre-demo-app\"}",
+                      "legendFormat": "{{pod}}"
+                    }
+                  ],
+                  "fieldConfig": {
+                    "defaults": {
+                      "color": {
+                        "mode": "thresholds"
+                      },
+                      "thresholds": {
+                        "steps": [
+                          {"color": "red", "value": 0},
+                          {"color": "green", "value": 1}
+                        ]
+                      }
+                    }
+                  }
+                },
+                {
+                  "id": 2,
+                  "title": "CPU Usage",
+                  "type": "graph",
+                  "targets": [
+                    {
+                      "expr": "rate(container_cpu_usage_seconds_total{container=\"sre-demo-app\"}[5m])",
+                      "legendFormat": "{{pod}}"
+                    }
+                  ]
+                },
+                {
+                  "id": 3,
+                  "title": "Memory Usage",
+                  "type": "graph",
+                  "targets": [
+                    {
+                      "expr": "container_memory_usage_bytes{container=\"sre-demo-app\"}",
+                      "legendFormat": "{{pod}}"
+                    }
+                  ]
+                }
+              ]
+            }
+          } 

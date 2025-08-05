@@ -1,0 +1,16 @@
+apiVersion: v2
+name: sre-demo-app
+description: A Helm chart for SRE Incident Demo Application
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - sre
+  - demo
+  - incident
+home: https://github.com/your-repo/sre-terraform-eks-aws-incident-scenario
+sources:
+  - https://github.com/your-repo/sre-terraform-eks-aws-incident-scenario
+maintainers:
+  - name: DevOps Team
+    email: devops@company.com 

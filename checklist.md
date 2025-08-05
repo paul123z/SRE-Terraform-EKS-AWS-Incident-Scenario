@@ -1,73 +1,73 @@
 ✅ Phase 1: Infra with Terraform
- Set up backend config (e.g., S3 + DynamoDB for remote state)
+✅ Set up backend config (e.g., S3 + DynamoDB for remote state)
 
- VPC, subnets (use AWS VPC module)
+✅ VPC, subnets (use AWS VPC module)
 
- EKS cluster (use official terraform-aws-eks module)
+✅ EKS cluster (use official terraform-aws-eks module)
 
- Node group
+✅ Node group
 
- IAM roles for nodes & kubectl access
+✅ IAM roles for nodes & kubectl access
 
- Output kubeconfig
+✅ Output kubeconfig
 
 ✅ Phase 2: Deploy App to EKS
- Write simple app manifests (or use an existing container)
+✅ Write simple app manifests (or use an existing container)
 
- Apply with kubectl or Helm
+✅ Apply with kubectl or Helm
 
- Expose via LoadBalancer or Ingress
+✅ Expose via LoadBalancer or Ingress
 
 ✅ Phase 3: Add Monitoring (optional but adds wow-factor)
- Install Prometheus + Grafana via Helm
+✅ Install Prometheus + Grafana via Helm
 
- Expose dashboards
+✅ Expose dashboards
 
- Add basic alerts (e.g., high CPU, pod crash loop)
+✅ Add basic alerts (e.g., high CPU, pod crash loop)
 
 ✅ Phase 4: Simulate & Document Incident
- Option 1: Misconfigure liveness probe
+✅ Option 1: Misconfigure liveness probe
 
- Option 2: Deploy app that crashes on load
+✅ Option 2: Deploy app that crashes on load
 
- Option 3: Break a dependency (e.g., DNS issue)
+✅ Option 3: Break a dependency (e.g., DNS issue)
 
- Create a script or CI step to simulate the issue
+✅ Create a script or CI step to simulate the issue
 
- Use logs, metrics, and kubectl to investigate
+✅ Use logs, metrics, and kubectl to investigate
 
- Document root cause + resolution
+✅ Document root cause + resolution
 
 ✅ Phase 5: Declarative CI/CD
- GitHub Actions workflow:
+✅ GitHub Actions workflow:
 
-Plan & apply Terraform (optionally)
+✅ Plan & apply Terraform (optionally)
 
-Deploy app via kubectl apply or Helm
+✅ Deploy app via kubectl apply or Helm
 
-Bonus: Trigger from PR
+✅ Bonus: Trigger from PR
 
 ✅ Phase 6: Prepare for Presentation
- Create slides:
+✅ Create slides:
 
-Architecture overview
+✅ Architecture overview
 
-Tools used
+✅ Tools used
 
-Infra plan
+✅ Infra plan
 
-Incident scenario + timeline
+✅ Incident scenario + timeline
 
-Resolution steps
+✅ Resolution steps
 
-What you’d do better in a real prod environment
+✅ What you'd do better in a real prod environment
 
- Polish README with:
+✅ Polish README with:
 
-Setup instructions
+✅ Setup instructions
 
-CI/CD description
+✅ CI/CD description
 
-Incident walkthrough
+✅ Incident walkthrough
 
-Diagrams/screenshots
+✅ Diagrams/screenshots
