@@ -2,6 +2,9 @@
 
 ## 📋 Video Structure & Key Points
 
+### **🎯 Important Note**
+This manual step-by-step approach will achieve the **exact same result** as running `./scripts/deploy.sh`. The difference is that you'll understand each step and can explain what's happening during your YouTube recording.
+
 ### 🎯 **Introduction (2-3 minutes)**
 - **Project Overview**: "This is an open-source project I've created for the SRE, DevOps, and Cloud community"
 - **What we'll build**: "A complete production-like environment with AWS EKS, monitoring, and incident simulation capabilities"
@@ -145,7 +148,23 @@ helm repo add prometheus-community https://prometheus-community.github.io/helm-c
 helm repo update
 ```
 
-#### **Step 2: Install Monitoring Stack**
+#### **Step 2: Install EBS CSI Driver (Required for Monitoring)**
+```bash
+# Add EBS CSI Driver repository
+helm repo add aws-ebs-csi-driver https://kubernetes-sigs.github.io/aws-ebs-csi-driver
+helm repo update
+
+# Install EBS CSI Driver
+helm upgrade --install aws-ebs-csi-driver aws-ebs-csi-driver/aws-ebs-csi-driver --namespace kube-system
+
+# Get node group role and attach policy
+NODE_GROUP_NAME=$(aws eks list-nodegroups --cluster-name sre-incident-demo-cluster --region eu-central-1 --query 'nodegroups[0]' --output text)
+NODE_GROUP_ROLE=$(aws eks describe-nodegroup --cluster-name sre-incident-demo-cluster --nodegroup-name $NODE_GROUP_NAME --region eu-central-1 --query 'nodegroup.nodeRole' --output text | cut -d'/' -f2)
+aws iam attach-role-policy --role-name $NODE_GROUP_ROLE --policy-arn arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy
+```
+**Explain**: "This enables persistent storage for Prometheus and Grafana"
+
+#### **Step 3: Install Monitoring Stack**
 ```bash
 helm install prometheus prometheus-community/kube-prometheus-stack \
   -f ../monitoring/prometheus-values.yaml \
@@ -154,39 +173,71 @@ helm install prometheus prometheus-community/kube-prometheus-stack \
 ```
 **Explain**: "This installs Prometheus and Grafana for monitoring"
 
-#### **Step 3: Access Grafana**
+#### **Step 4: Access Grafana**
 ```bash
 kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80
 ```
 **Show**: "Grafana dashboard with pre-configured SRE dashboards"
 
-### 🚨 **Incident Simulation Demo (4-5 minutes)**
+### 🚨 **Incident Simulation Demo (6-8 minutes)**
 
 #### **Step 1: Show Normal Operation**
-- Visit the application URL
-- Show health check endpoint
-- Show normal metrics in Grafana
+- Visit the application URL: `http://<load-balancer-url>`
+- Show health check endpoint: `curl http://<app-url>/health`
+- Show normal metrics in Grafana dashboard
+- **Explain**: "This is our baseline - everything is healthy"
 
-#### **Step 2: Simulate an Incident**
+#### **Step 2: Access Grafana Dashboard**
 ```bash
-curl -X POST http://<app-url>/api/failure-mode \
-  -H "Content-Type: application/json" \
-  -d '{"mode": "health_failure"}'
+# Port forward to access Grafana
+kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80
 ```
-**Explain**: "This simulates a health check failure"
+- **Show**: Grafana dashboard at `http://localhost:3000`
+- **Credentials**: `admin` / `admin123`
+- **Navigate to**: SRE Demo Dashboard
+- **Explain**: "We can see CPU, memory, and application health metrics"
 
-#### **Step 3: Show Incident Detection**
-- Show how health checks start failing
-- Show Prometheus alerts
-- Show Grafana dashboards changing
-
-#### **Step 4: Demonstrate Resolution**
+#### **Step 3: Simulate Memory Leak Incident**
 ```bash
-curl -X POST http://<app-url>/api/failure-mode \
+# Enable memory leak simulation
+curl -X POST http://<app-url>/api/memory-leak \
   -H "Content-Type: application/json" \
-  -d '{"mode": "none"}'
+  -d '{"enable": true}'
 ```
-**Show**: "How the system recovers and metrics return to normal"
+**Explain**: "This triggers a memory leak in our application"
+
+#### **Step 4: Show Real-Time Memory Increase**
+- **Switch to Grafana**: Show memory usage graph
+- **Explain**: "Watch how memory consumption increases over time"
+- **Show**: Memory metrics climbing steadily
+- **Point out**: "This is exactly what a real memory leak looks like"
+
+#### **Step 5: Demonstrate Incident Response**
+```bash
+# Check pod status
+kubectl get pods -l app.kubernetes.io/name=sre-demo-app
+
+# Check resource usage
+kubectl top pods -l app.kubernetes.io/name=sre-demo-app
+
+# Show pod logs
+kubectl logs -l app.kubernetes.io/name=sre-demo-app
+```
+**Explain**: "This is how an SRE would investigate the incident"
+
+#### **Step 6: Resolve the Incident**
+```bash
+# Disable memory leak
+curl -X POST http://<app-url>/api/memory-leak \
+  -H "Content-Type: application/json" \
+  -d '{"enable": false}'
+```
+**Show**: "Memory usage stabilizes and returns to normal"
+
+#### **Step 7: Show Recovery in Grafana**
+- **Switch back to Grafana**: Show memory graph stabilizing
+- **Explain**: "The system recovers and metrics return to baseline"
+- **Point out**: "This demonstrates real-time monitoring and incident response"
 
 ### 🧹 **Cleanup & Cost Management (2-3 minutes)**
 
@@ -266,12 +317,12 @@ curl -X POST http://<app-url>/api/failure-mode \
 | Infrastructure | 5-7 min | Terraform deployment |
 | Build & Push | 3-4 min | Docker and ECR |
 | Deployment | 3-4 min | Helm and Kubernetes |
-| Monitoring | 3-4 min | Prometheus and Grafana |
-| Demo | 4-5 min | Incident simulation |
+| Monitoring | 4-5 min | Prometheus and Grafana |
+| Demo | 6-8 min | Incident simulation |
 | Cleanup | 2-3 min | Cost management |
 | Wrap-up | 2-3 min | Takeaways and next steps |
 
-**Total Estimated Time**: 30-40 minutes
+**Total Estimated Time**: 35-45 minutes
 
 ## 🚀 **Ready to Record!**
 
