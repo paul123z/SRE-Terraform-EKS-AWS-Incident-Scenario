@@ -89,6 +89,30 @@ This directory contains automation scripts for the SRE Demo project. Each script
 
 ---
 
+### **`teardown-verify.sh`** - Teardown Verification
+**Purpose**: Verify that all AWS resources have been properly cleaned up.
+
+**What it does**:
+- ✅ Checks EKS clusters (should be deleted)
+- ✅ Checks ECR repositories (should be deleted)
+- ✅ Checks VPCs and networking (should be deleted)
+- ✅ Checks Load Balancers (should be deleted)
+- ✅ Checks Security Groups (should be deleted)
+- ✅ Checks EC2 instances (should be deleted)
+- ✅ Checks IAM roles (warns if still exist)
+- ✅ Checks EBS volumes (warns if still exist)
+- ✅ Checks local Terraform files (should be deleted)
+- ✅ Provides detailed summary with next steps
+
+**Usage**:
+```bash
+./scripts/teardown-verify.sh
+```
+
+**When to use**: After running `teardown.sh` to verify everything is cleaned up properly.
+
+---
+
 ## 🚨 **Testing & Simulation Scripts**
 
 ### **`incident-simulator.sh`** - Interactive Incident Simulation
