@@ -1,0 +1,207 @@
+#!/bin/bash
+
+# SRE Demo Teardown Script
+# This script safely removes all infrastructure and resources
+
+set -e
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Configuration
+AWS_REGION="eu-central-1"
+CLUSTER_NAME="sre-incident-demo-cluster"
+ECR_REPOSITORY="sre-demo-app"
+APP_NAME="sre-demo-app"
+NAMESPACE="default"
+
+# Function to print colored output
+print_status() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+print_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+print_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+print_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# Function to check if cluster exists
+check_cluster_exists() {
+    if aws eks describe-cluster --region $AWS_REGION --name $CLUSTER_NAME &> /dev/null; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Function to check if kubectl is configured
+check_kubectl_config() {
+    if kubectl cluster-info &> /dev/null; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Function to remove Helm releases
+remove_helm_releases() {
+    print_status "Removing Helm releases..."
+    
+    # Remove application
+    if helm list -n $NAMESPACE | grep -q $APP_NAME; then
+        helm uninstall $APP_NAME -n $NAMESPACE
+        print_success "Application uninstalled"
+    else
+        print_status "Application not found"
+    fi
+    
+    # Remove monitoring
+    if helm list -n monitoring | grep -q prometheus; then
+        helm uninstall prometheus -n monitoring
+        print_success "Monitoring uninstalled"
+    else
+        print_status "Monitoring not found"
+    fi
+}
+
+# Function to clean up ECR
+cleanup_ecr() {
+    print_status "Cleaning up ECR repository..."
+    
+    if aws ecr describe-repositories --repository-names $ECR_REPOSITORY --region $AWS_REGION &> /dev/null; then
+        # Delete all images
+        aws ecr batch-delete-image \
+            --repository-name $ECR_REPOSITORY \
+            --image-ids imageTag=latest \
+            --region $AWS_REGION || true
+        
+        # Delete repository
+        aws ecr delete-repository \
+            --repository-name $ECR_REPOSITORY \
+            --force \
+            --region $AWS_REGION
+        
+        print_success "ECR repository deleted"
+    else
+        print_status "ECR repository not found"
+    fi
+}
+
+# Function to destroy infrastructure
+destroy_infrastructure() {
+    print_status "Destroying infrastructure with Terraform..."
+    
+    cd terraform
+    
+    # Check if state file exists
+    if [ ! -f "terraform.tfstate" ]; then
+        print_warning "No Terraform state file found. Infrastructure may already be destroyed."
+        cd ..
+        return
+    fi
+    
+    # Destroy infrastructure
+    terraform destroy -auto-approve
+    
+    cd ..
+    
+    print_success "Infrastructure destroyed successfully"
+}
+
+# Function to clean up local files
+cleanup_local_files() {
+    print_status "Cleaning up local files..."
+    
+    # Remove Terraform state files
+    if [ -f "terraform/terraform.tfstate" ]; then
+        rm terraform/terraform.tfstate*
+        print_success "Terraform state files removed"
+    fi
+    
+    # Remove Terraform lock file
+    if [ -f "terraform/.terraform.lock.hcl" ]; then
+        rm terraform/.terraform.lock.hcl
+        print_success "Terraform lock file removed"
+    fi
+    
+    # Remove .terraform directory
+    if [ -d "terraform/.terraform" ]; then
+        rm -rf terraform/.terraform
+        print_success "Terraform cache removed"
+    fi
+}
+
+# Function to show cleanup summary
+show_cleanup_summary() {
+    echo ""
+    print_status "=== CLEANUP COMPLETED ==="
+    echo ""
+    print_status "The following resources have been removed:"
+    echo "✅ EKS Cluster: $CLUSTER_NAME"
+    echo "✅ VPC and networking resources"
+    echo "✅ IAM roles and policies"
+    echo "✅ Application deployment"
+    echo "✅ Monitoring stack (Prometheus/Grafana)"
+    echo "✅ ECR repository and images"
+    echo "✅ Local Terraform state files"
+    echo ""
+    print_warning "Note: Some AWS resources may take a few minutes to fully delete"
+    echo ""
+    print_status "To verify cleanup, you can:"
+    echo "- Check EKS clusters: aws eks list-clusters --region $AWS_REGION"
+    echo "- Check ECR repositories: aws ecr describe-repositories --region $AWS_REGION"
+    echo "- Check VPCs: aws ec2 describe-vpcs --region $AWS_REGION"
+    echo ""
+}
+
+# Main function
+main() {
+    print_status "Starting SRE Demo teardown..."
+    echo ""
+    
+    # Check if cluster exists
+    if ! check_cluster_exists; then
+        print_warning "EKS cluster not found. Some resources may already be cleaned up."
+    fi
+    
+    # Update kubeconfig if cluster exists
+    if check_cluster_exists; then
+        print_status "Updating kubeconfig..."
+        aws eks update-kubeconfig --region $AWS_REGION --name $CLUSTER_NAME
+        
+        # Remove Helm releases if kubectl is configured
+        if check_kubectl_config; then
+            remove_helm_releases
+        else
+            print_warning "kubectl not configured. Skipping Helm cleanup."
+        fi
+    fi
+    
+    # Clean up ECR
+    cleanup_ecr
+    
+    # Destroy infrastructure
+    destroy_infrastructure
+    
+    # Clean up local files
+    cleanup_local_files
+    
+    # Show summary
+    show_cleanup_summary
+    
+    print_success "SRE Demo teardown completed successfully!"
+}
+
+# Run main function
+main "$@" 

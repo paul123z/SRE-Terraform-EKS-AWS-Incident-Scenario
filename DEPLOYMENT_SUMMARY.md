@@ -224,7 +224,13 @@ kubectl rollout status deployment sre-demo-app
 
 ## 🧹 Cleanup Instructions
 
-### Complete Cleanup
+### Complete Cleanup (Recommended)
+```bash
+# One-command teardown
+./scripts/teardown.sh
+```
+
+### Manual Cleanup
 ```bash
 # Remove application
 helm uninstall sre-demo-app
@@ -237,15 +243,15 @@ cd terraform
 terraform destroy
 
 # Clean up ECR images
-aws ecr batch-delete-image --repository-name sre-demo-app --image-ids imageTag=latest
+aws ecr batch-delete-image --repository-name sre-demo-app --image-ids imageTag=latest --region eu-central-1
 ```
 
-### Partial Cleanup
+### Partial Cleanup (Keep Infrastructure)
 ```bash
-# Remove only application (keep infrastructure)
+# Remove only application (keep EKS cluster)
 helm uninstall sre-demo-app
 
-# Remove only monitoring (keep app and infra)
+# Remove only monitoring (keep EKS cluster)
 helm uninstall prometheus -n monitoring
 ```
 
