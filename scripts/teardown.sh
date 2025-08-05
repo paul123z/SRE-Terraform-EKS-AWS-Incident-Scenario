@@ -16,6 +16,8 @@ NC='\033[0m' # No Color
 AWS_REGION="eu-central-1"
 CLUSTER_NAME="sre-incident-demo-cluster"
 ECR_REPOSITORY="sre-demo-app"
+AWS_CMD=$(command -v aws || echo "/usr/local/bin/aws")
+KUBECTL_CMD=$(command -v kubectl || echo "/usr/local/bin/kubectl")
 APP_NAME="sre-demo-app"
 NAMESPACE="default"
 
@@ -38,7 +40,7 @@ print_error() {
 
 # Function to check if cluster exists
 check_cluster_exists() {
-    if aws eks describe-cluster --region $AWS_REGION --name $CLUSTER_NAME &> /dev/null; then
+    if $AWS_CMD eks describe-cluster --region $AWS_REGION --name $CLUSTER_NAME &> /dev/null; then
         return 0
     else
         return 1
@@ -47,7 +49,7 @@ check_cluster_exists() {
 
 # Function to check if kubectl is configured
 check_kubectl_config() {
-    if kubectl cluster-info &> /dev/null; then
+if $KUBECTL_CMD cluster-info &> /dev/null; then
         return 0
     else
         return 1
@@ -79,15 +81,15 @@ remove_helm_releases() {
 cleanup_ecr() {
     print_status "Cleaning up ECR repository..."
     
-    if aws ecr describe-repositories --repository-names $ECR_REPOSITORY --region $AWS_REGION &> /dev/null; then
+    if $AWS_CMD ecr describe-repositories --repository-names $ECR_REPOSITORY --region $AWS_REGION &> /dev/null; then
         # Delete all images
-        aws ecr batch-delete-image \
+        $AWS_CMD ecr batch-delete-image \
             --repository-name $ECR_REPOSITORY \
             --image-ids imageTag=latest \
             --region $AWS_REGION || true
         
         # Delete repository
-        aws ecr delete-repository \
+        $AWS_CMD ecr delete-repository \
             --repository-name $ECR_REPOSITORY \
             --force \
             --region $AWS_REGION
@@ -107,10 +109,10 @@ cleanup_ebs_csi_driver() {
         helm uninstall aws-ebs-csi-driver -n kube-system || true
         
         # Remove IAM policy from node group role
-        NODE_GROUP_NAME=$(aws eks list-nodegroups --cluster-name $CLUSTER_NAME --region $AWS_REGION --query 'nodegroups[0]' --output text 2>/dev/null || echo "")
+        NODE_GROUP_NAME=$($AWS_CMD eks list-nodegroups --cluster-name $CLUSTER_NAME --region $AWS_REGION --query 'nodegroups[0]' --output text 2>/dev/null || echo "")
         if [ -n "$NODE_GROUP_NAME" ]; then
-            NODE_GROUP_ROLE=$(aws eks describe-nodegroup --cluster-name $CLUSTER_NAME --nodegroup-name $NODE_GROUP_NAME --region $AWS_REGION --query 'nodegroup.nodeRole' --output text | cut -d'/' -f2)
-            aws iam detach-role-policy --role-name $NODE_GROUP_ROLE --policy-arn arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy || true
+            NODE_GROUP_ROLE=$($AWS_CMD eks describe-nodegroup --cluster-name $CLUSTER_NAME --nodegroup-name $NODE_GROUP_NAME --region $AWS_REGION --query 'nodegroup.nodeRole' --output text | cut -d'/' -f2)
+            $AWS_CMD iam detach-role-policy --role-name $NODE_GROUP_ROLE --policy-arn arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy || true
             print_success "EBS CSI Driver cleaned up"
         else
             print_status "Node group not found, skipping EBS CSI Driver cleanup"
@@ -182,9 +184,9 @@ show_cleanup_summary() {
     print_warning "Note: Some AWS resources may take a few minutes to fully delete"
     echo ""
     print_status "To verify cleanup, you can:"
-    echo "- Check EKS clusters: aws eks list-clusters --region $AWS_REGION"
-    echo "- Check ECR repositories: aws ecr describe-repositories --region $AWS_REGION"
-    echo "- Check VPCs: aws ec2 describe-vpcs --region $AWS_REGION"
+    echo "- Check EKS clusters: $AWS_CMD eks list-clusters --region $AWS_REGION"
+    echo "- Check ECR repositories: $AWS_CMD ecr describe-repositories --region $AWS_REGION"
+    echo "- Check VPCs: $AWS_CMD ec2 describe-vpcs --region $AWS_REGION"
     echo ""
 }
 
@@ -201,7 +203,7 @@ main() {
     # Update kubeconfig if cluster exists
     if check_cluster_exists; then
         print_status "Updating kubeconfig..."
-        aws eks update-kubeconfig --region $AWS_REGION --name $CLUSTER_NAME
+        $AWS_CMD eks update-kubeconfig --region $AWS_REGION --name $CLUSTER_NAME
         
         # Remove Helm releases if kubectl is configured
         if check_kubectl_config; then

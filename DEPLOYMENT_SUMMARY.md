@@ -147,6 +147,7 @@ kubectl rollout status deployment sre-demo-app
 ### Cost Optimization Features
 - Single NAT Gateway (vs multiple)
 - t3.medium instances (cost-effective)
+- 2 nodes minimum (for high availability)
 - Minimal replicas (1-3 pods)
 - 7-day Prometheus retention
 - Auto-scaling to reduce idle costs

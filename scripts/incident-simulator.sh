@@ -16,6 +16,8 @@ NC='\033[0m' # No Color
 APP_NAME="sre-demo-app"
 NAMESPACE="default"
 SERVICE_URL=""
+AWS_CMD=$(command -v aws || echo "/usr/local/bin/aws")
+KUBECTL_CMD=$(command -v kubectl || echo "/usr/local/bin/kubectl")
 
 # Function to print colored output
 print_status() {
@@ -37,9 +39,9 @@ print_error() {
 # Function to get service URL
 get_service_url() {
     print_status "Getting service URL..."
-    SERVICE_URL=$(kubectl get svc $APP_NAME -n $NAMESPACE -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+    SERVICE_URL=$($KUBECTL_CMD get svc $APP_NAME -n $NAMESPACE -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
     if [ -z "$SERVICE_URL" ]; then
-        SERVICE_URL=$(kubectl get svc $APP_NAME -n $NAMESPACE -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+        SERVICE_URL=$($KUBECTL_CMD get svc $APP_NAME -n $NAMESPACE -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
     fi
     print_success "Service URL: http://$SERVICE_URL"
 }
@@ -114,42 +116,42 @@ reset_simulations() {
 # Function to show pod status
 show_pod_status() {
     print_status "Current pod status:"
-    kubectl get pods -l app.kubernetes.io/name=$APP_NAME -n $NAMESPACE
+    $KUBECTL_CMD get pods -l app.kubernetes.io/name=$APP_NAME -n $NAMESPACE
     echo ""
     print_status "Pod logs:"
-    kubectl logs -l app.kubernetes.io/name=$APP_NAME -n $NAMESPACE --tail=10
+    $KUBECTL_CMD logs -l app.kubernetes.io/name=$APP_NAME -n $NAMESPACE --tail=10
 }
 
 # Function to show metrics
 show_metrics() {
     print_status "Current resource usage:"
-    kubectl top pods -l app.kubernetes.io/name=$APP_NAME -n $NAMESPACE
+    $KUBECTL_CMD top pods -l app.kubernetes.io/name=$APP_NAME -n $NAMESPACE
 }
 
 # Function to show HPA status
 show_hpa_status() {
     print_status "HPA status:"
-    kubectl get hpa -n $NAMESPACE
+    $KUBECTL_CMD get hpa -n $NAMESPACE
 }
 
 # Function to show service status
 show_service_status() {
     print_status "Service status:"
-    kubectl get svc $APP_NAME -n $NAMESPACE
+    $KUBECTL_CMD get svc $APP_NAME -n $NAMESPACE
 }
 
 # Function to scale application
 scale_app() {
     local replicas=$1
     print_status "Scaling application to $replicas replicas..."
-    kubectl scale deployment $APP_NAME -n $NAMESPACE --replicas=$replicas
+    $KUBECTL_CMD scale deployment $APP_NAME -n $NAMESPACE --replicas=$replicas
     print_success "Scaled to $replicas replicas"
 }
 
 # Function to restart application
 restart_app() {
     print_status "Restarting application..."
-    kubectl rollout restart deployment $APP_NAME -n $NAMESPACE
+    $KUBECTL_CMD rollout restart deployment $APP_NAME -n $NAMESPACE
     print_success "Application restart initiated"
 }
 
@@ -194,13 +196,13 @@ main() {
     print_status "Starting SRE Incident Simulator..."
     
     # Check if kubectl is available
-    if ! command -v kubectl &> /dev/null; then
+    if ! command -v kubectl &> /dev/null && ! /usr/local/bin/kubectl version --client &> /dev/null; then
         print_error "kubectl is not installed or not in PATH"
         exit 1
     fi
     
     # Check if application is deployed
-    if ! kubectl get deployment $APP_NAME -n $NAMESPACE &> /dev/null; then
+    if ! $KUBECTL_CMD get deployment $APP_NAME -n $NAMESPACE &> /dev/null; then
         print_error "Application $APP_NAME not found in namespace $NAMESPACE"
         print_status "Please deploy the application first"
         exit 1

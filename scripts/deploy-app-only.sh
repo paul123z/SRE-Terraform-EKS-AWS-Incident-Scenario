@@ -17,6 +17,8 @@ AWS_REGION="eu-central-1"
 CLUSTER_NAME="sre-incident-demo-cluster"
 APP_NAME="sre-demo-app"
 ECR_REPOSITORY="sre-demo-app"
+AWS_CMD=$(command -v aws || echo "/usr/local/bin/aws")
+KUBECTL_CMD=$(command -v kubectl || echo "/usr/local/bin/kubectl")
 
 # Function to print colored output
 print_status() {
@@ -46,7 +48,7 @@ check_prerequisites() {
     fi
     
     # Check kubectl
-    if ! command -v kubectl &> /dev/null; then
+    if ! command -v kubectl &> /dev/null && ! /usr/local/bin/kubectl version --client &> /dev/null; then
         print_error "kubectl is not installed"
         exit 1
     fi
@@ -97,18 +99,18 @@ verify_deployment() {
     print_status "Verifying deployment..."
     
     # Wait for pods to be ready
-    kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=$APP_NAME --timeout=300s
+    $KUBECTL_CMD wait --for=condition=ready pod -l app.kubernetes.io/name=$APP_NAME --timeout=300s
     
     # Show pod status
     print_status "Pod status:"
-    kubectl get pods -l app.kubernetes.io/name=$APP_NAME
+    $KUBECTL_CMD get pods -l app.kubernetes.io/name=$APP_NAME
     
     # Show service status
     print_status "Service status:"
-    kubectl get svc $APP_NAME
+    $KUBECTL_CMD get svc $APP_NAME
     
     # Get service URL
-    SERVICE_URL=$(kubectl get svc $APP_NAME -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+    SERVICE_URL=$($KUBECTL_CMD get svc $APP_NAME -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
     if [ -n "$SERVICE_URL" ]; then
         print_success "Application URL: http://$SERVICE_URL"
     else

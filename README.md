@@ -354,8 +354,26 @@ kubectl rollout status deployment sre-demo-app
 
 ## 🛠️ CI/CD Pipeline
 
-The GitHub Actions workflow includes:
+The project includes multiple GitHub Actions workflows:
 
+### **deploy.yml** - Full Infrastructure & Application Deployment
+- **Trigger**: Manual (`workflow_dispatch`)
+- **Purpose**: Complete end-to-end deployment
+- **Steps**: Infrastructure → Build → Push → Deploy → Monitoring
+
+### **build-push-deploy-app.yml** - Build, Push & Deploy Application
+- **Trigger**: Manual (`workflow_dispatch`)
+- **Purpose**: Build new image and deploy application
+- **Steps**: Build → Push → Deploy → Verify
+- **Use case**: When you've updated application code and want to deploy
+
+### **deploy-app-only.yml** - Application Deployment Only
+- **Trigger**: Manual (`workflow_dispatch`)
+- **Purpose**: Deploy existing application image
+- **Steps**: Deploy → Verify
+- **Use case**: When you want to redeploy the same image
+
+### Workflow Features:
 1. **Testing**: Node.js application tests
 2. **Building**: Docker image build
 3. **Pushing**: ECR image push
@@ -403,11 +421,12 @@ This project is designed for minimal cost:
 
 - **Single NAT Gateway**: Reduces networking costs
 - **t3.medium instances**: Cost-effective compute
+- **2 nodes minimum**: For high availability and pod capacity
 - **Minimal replicas**: 1-3 pods by default
 - **7-day retention**: Limited Prometheus storage
 - **Auto-scaling**: Scale down when not needed
 
-**Estimated Monthly Cost**: ~$50-100 USD
+**Estimated Monthly Cost**: ~$80-150 USD (with 2 nodes for high availability)
 
 ## 🧹 Cleanup
 

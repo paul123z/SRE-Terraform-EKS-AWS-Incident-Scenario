@@ -18,6 +18,8 @@ CLUSTER_NAME="sre-incident-demo-cluster"
 ECR_REPOSITORY="sre-demo-app"
 APP_NAME="sre-demo-app"
 NAMESPACE="default"
+AWS_CMD=$(command -v aws || echo "/usr/local/bin/aws")
+KUBECTL_CMD=$(command -v kubectl || echo "/usr/local/bin/kubectl")
 
 # Function to print colored output
 print_status() {
@@ -41,7 +43,7 @@ check_prerequisites() {
     print_status "Checking prerequisites..."
     
     # Check AWS CLI
-    if ! command -v aws &> /dev/null; then
+    if ! command -v aws &> /dev/null && ! /usr/local/bin/aws --version &> /dev/null; then
         print_error "AWS CLI is not installed"
         exit 1
     fi
@@ -53,7 +55,7 @@ check_prerequisites() {
     fi
     
     # Check kubectl
-    if ! command -v kubectl &> /dev/null; then
+    if ! command -v kubectl &> /dev/null && ! /usr/local/bin/kubectl version --client &> /dev/null; then
         print_error "kubectl is not installed"
         exit 1
     fi
@@ -71,7 +73,8 @@ check_prerequisites() {
     fi
     
     # Check AWS credentials
-    if ! aws sts get-caller-identity &> /dev/null; then
+    AWS_CMD=$(command -v aws || echo "/usr/local/bin/aws")
+    if ! $AWS_CMD sts get-caller-identity &> /dev/null; then
         print_error "AWS credentials not configured"
         exit 1
     fi
@@ -82,7 +85,9 @@ check_prerequisites() {
 
 # Function to get AWS account ID
 get_aws_account_id() {
-    AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+    # Use full path if aws not in PATH
+    AWS_CMD=$(command -v aws || echo "/usr/local/bin/aws")
+    AWS_ACCOUNT_ID=$($AWS_CMD sts get-caller-identity --query Account --output text)
     print_status "AWS Account ID: $AWS_ACCOUNT_ID"
 }
 
@@ -90,8 +95,8 @@ get_aws_account_id() {
 create_ecr_repository() {
     print_status "Creating ECR repository..."
     
-    if ! aws ecr describe-repositories --repository-names $ECR_REPOSITORY --region $AWS_REGION &> /dev/null; then
-        aws ecr create-repository --repository-name $ECR_REPOSITORY --region $AWS_REGION
+    if ! $AWS_CMD ecr describe-repositories --repository-names $ECR_REPOSITORY --region $AWS_REGION &> /dev/null; then
+        $AWS_CMD ecr create-repository --repository-name $ECR_REPOSITORY --region $AWS_REGION
         print_success "ECR repository created"
     else
         print_status "ECR repository already exists"
@@ -117,7 +122,7 @@ deploy_infrastructure() {
     
     # Get cluster info
     print_status "Updating kubeconfig..."
-    aws eks update-kubeconfig --region $AWS_REGION --name $CLUSTER_NAME
+    $AWS_CMD eks update-kubeconfig --region $AWS_REGION --name $CLUSTER_NAME
     
     cd ..
     
@@ -139,7 +144,7 @@ build_and_push_app() {
     
     # Login to ECR
     print_status "Logging in to ECR..."
-    aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+    $AWS_CMD ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
     
     # Push the image
     print_status "Pushing image to ECR..."
@@ -178,7 +183,7 @@ setup_monitoring() {
     print_status "Installing EBS CSI Driver..."
     
     # Remove existing EBS CSI Driver if installed with kubectl
-    kubectl delete -k "github.com/kubernetes-sigs/aws-ebs-csi-driver/deploy/kubernetes/overlays/stable/?ref=release-1.28" || true
+    $KUBECTL_CMD delete -k "github.com/kubernetes-sigs/aws-ebs-csi-driver/deploy/kubernetes/overlays/stable/?ref=release-1.28" || true
     
     # Add AWS EBS CSI Driver Helm repository
     helm repo add aws-ebs-csi-driver https://kubernetes-sigs.github.io/aws-ebs-csi-driver
@@ -192,17 +197,23 @@ setup_monitoring() {
     
     # Wait for EBS CSI Driver to be ready
     print_status "Waiting for EBS CSI Driver to be ready..."
-    kubectl wait --for=condition=ready pod -l app=ebs-csi-controller -n kube-system --timeout=300s
+    $KUBECTL_CMD wait --for=condition=ready pod -l app=ebs-csi-controller -n kube-system --timeout=300s
     
     # Get the node group name dynamically
     print_status "Adding EBS CSI Driver permissions to node group..."
-    NODE_GROUP_NAME=$(aws eks list-nodegroups --cluster-name $CLUSTER_NAME --region $AWS_REGION --query 'nodegroups[0]' --output text)
-    NODE_GROUP_ROLE=$(aws eks describe-nodegroup --cluster-name $CLUSTER_NAME --nodegroup-name $NODE_GROUP_NAME --region $AWS_REGION --query 'nodegroup.nodeRole' --output text | cut -d'/' -f2)
+    NODE_GROUP_NAME=$($AWS_CMD eks list-nodegroups --cluster-name $CLUSTER_NAME --region $AWS_REGION --query 'nodegroups[0]' --output text)
+    NODE_GROUP_ROLE=$($AWS_CMD eks describe-nodegroup --cluster-name $CLUSTER_NAME --nodegroup-name $NODE_GROUP_NAME --region $AWS_REGION --query 'nodegroup.nodeRole' --output text | cut -d'/' -f2)
     
     # Attach EBS CSI Driver policy to node group role
-    aws iam attach-role-policy --role-name $NODE_GROUP_ROLE --policy-arn arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy
+    $AWS_CMD iam attach-role-policy --role-name $NODE_GROUP_ROLE --policy-arn arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy
     
     print_status "EBS CSI Driver setup completed"
+    
+    # Install Metrics Server for resource monitoring
+    print_status "Installing Metrics Server..."
+    $KUBECTL_CMD apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+    $KUBECTL_CMD wait --for=condition=ready pod -l k8s-app=metrics-server -n kube-system --timeout=300s
+    print_success "Metrics Server installed"
     
     # Add Prometheus Helm repository
     helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
@@ -225,18 +236,18 @@ verify_deployment() {
     print_status "Verifying deployment..."
     
     # Check if pods are running
-    kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=$APP_NAME -n $NAMESPACE --timeout=300s
+    $KUBECTL_CMD wait --for=condition=ready pod -l app.kubernetes.io/name=$APP_NAME -n $NAMESPACE --timeout=300s
     
     # Check service
-    kubectl get svc $APP_NAME -n $NAMESPACE
+    $KUBECTL_CMD get svc $APP_NAME -n $NAMESPACE
     
     # Check HPA
-    kubectl get hpa -n $NAMESPACE
+    $KUBECTL_CMD get hpa -n $NAMESPACE
     
     # Get service URL
-    SERVICE_URL=$(kubectl get svc $APP_NAME -n $NAMESPACE -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+    SERVICE_URL=$($KUBECTL_CMD get svc $APP_NAME -n $NAMESPACE -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
     if [ -z "$SERVICE_URL" ]; then
-        SERVICE_URL=$(kubectl get svc $APP_NAME -n $NAMESPACE -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+        SERVICE_URL=$($KUBECTL_CMD get svc $APP_NAME -n $NAMESPACE -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
     fi
     
     print_success "Deployment verified successfully"

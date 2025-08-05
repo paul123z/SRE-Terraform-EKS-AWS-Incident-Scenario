@@ -84,15 +84,28 @@ app.post('/api/failure-mode', (req, res) => {
 app.post('/api/memory-leak', (req, res) => {
   const { enable } = req.body;
   if (enable) {
-    // Simulate memory leak
+    // Simulate memory leak - very aggressive for demo
+    console.log('Memory leak simulation enabled - will add 50MB every 3 seconds');
     setInterval(() => {
-      memoryLeak.push(new Array(1000000).fill('leak'));
-    }, 1000);
+      memoryLeak.push(new Array(50000000).fill('leak')); // 50MB instead of 10MB
+      console.log(`Memory leak: Added 50MB, total arrays: ${memoryLeak.length}, estimated memory: ${memoryLeak.length * 50}MB`);
+    }, 3000); // Every 3 seconds
     res.json({ message: 'Memory leak enabled', timestamp: new Date().toISOString() });
   } else {
     memoryLeak = [];
+    console.log('Memory leak simulation disabled - memory cleared');
     res.json({ message: 'Memory leak disabled', timestamp: new Date().toISOString() });
   }
+});
+
+app.get('/api/memory-status', (req, res) => {
+  const estimatedMemoryMB = memoryLeak.length * 50; // 50MB per array
+  res.json({
+    memoryLeakEnabled: memoryLeak.length > 0,
+    arraysCount: memoryLeak.length,
+    estimatedMemoryMB: estimatedMemoryMB,
+    timestamp: new Date().toISOString()
+  });
 });
 
 app.post('/api/cpu-stress', (req, res) => {

@@ -1,0 +1,23 @@
+HPA does NOT reset memory of existing pods - it creates NEW pods when scaling up and terminates OLD pods when scaling down.
+Here's what happens during a memory leak scenario:
+
+When HPA is ENABLED (normal operation):
+Memory leak starts → Pod memory usage increases
+HPA detects high memory → When memory reaches 80% of limit (as configured), HPA scales UP
+New pod is created → Fresh pod starts with 19MB memory (no leak)
+Old pod continues → Original pod keeps leaking memory until it hits the 2Gi limit
+Old pod gets killed → Kubernetes terminates the old pod when it hits memory limit
+New pod takes over → Traffic shifts to the new, healthy pod
+
+When HPA is DISABLED (our demo scenario):
+Memory leak starts → Pod memory usage increases
+No new pods created → HPA won't scale up
+Memory keeps growing → Pod continues leaking until it hits the 2Gi limit
+Pod gets killed → Kubernetes terminates the pod due to memory limit
+Pod restarts → Same pod restarts with fresh 19MB memory
+Cycle repeats → Memory leak starts again
+
+Why we disabled HPA in the demo:
+To see the memory growth clearly - without new pods being created
+To demonstrate the full impact - let the memory leak reach its natural conclusion
+To show the restart cycle - when the pod hits memory limits and restarts

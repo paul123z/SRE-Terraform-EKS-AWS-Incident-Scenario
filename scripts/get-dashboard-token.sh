@@ -5,8 +5,11 @@
 echo "🔑 Generating Kubernetes Dashboard token..."
 echo ""
 
+# Configuration
+KUBECTL_CMD=$(command -v kubectl || echo "/usr/local/bin/kubectl")
+
 # Generate token
-TOKEN=$(kubectl -n kubernetes-dashboard create token dashboard-admin)
+TOKEN=$($KUBECTL_CMD -n kubernetes-dashboard create token dashboard-admin)
 
 echo "✅ Token generated successfully!"
 echo ""
