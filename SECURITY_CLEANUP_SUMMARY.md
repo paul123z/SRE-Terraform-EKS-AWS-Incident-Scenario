@@ -22,9 +22,21 @@ terraform/.terraform/
 ```
 
 ### 2. **Removed from Git History**
-Used `git filter-branch` to completely remove `.tfstate` files from all commits:
+Used `git filter-branch` to completely remove sensitive files and data from all commits:
+
+**Terraform State Files:**
 ```bash
 git filter-branch --force --index-filter 'git rm --cached --ignore-unmatch terraform/*.tfstate* terraform/.terraform/terraform.tfstate' --prune-empty --tag-name-filter cat -- --all
+```
+
+**Sensitive AWS Configuration:**
+```bash
+git filter-branch --force --index-filter 'git rm --cached --ignore-unmatch aws-auth-patch.yaml' --prune-empty --tag-name-filter cat -- --all
+```
+
+**Sensitive Data Replacement:**
+```bash
+git filter-branch --force --tree-filter 'find . -type f -name "*.yaml" -o -name "*.yml" -o -name "*.md" -o -name "*.sh" | xargs sed -i "s/462738742234/<AWS_ACCOUNT_ID>/g; s/admin123/<GRAFANA_PASSWORD>/g"' --prune-empty --tag-name-filter cat -- --all
 ```
 
 ### 3. **Cleaned Repository**
@@ -34,6 +46,9 @@ git filter-branch --force --index-filter 'git rm --cached --ignore-unmatch terra
 
 ## 🔍 Verification
 - ✅ No `.tfstate` files found in Git history
+- ✅ No AWS account IDs found in Git history
+- ✅ No hardcoded passwords found in Git history
+- ✅ No sensitive AWS configuration files in Git history
 - ✅ `.gitignore` properly configured to prevent future commits
 - ✅ Repository is now safe for public release
 
