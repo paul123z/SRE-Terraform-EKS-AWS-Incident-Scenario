@@ -413,7 +413,7 @@ kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80
 
 **Default Credentials**:
 - Username: `admin`
-- Password: `<GRAFANA_PASSWORD>`
+- Password: `<GRAFANA_PASSWORD>` (can be changed via GRAFANA_PASSWORD environment variable)
 
 ## 💰 Cost Optimization
 
@@ -491,6 +491,20 @@ This is an open-source project for the SRE, DevOps, and Cloud community. We welc
 ## 📄 License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
+## 🔒 Security Considerations
+
+### **Before First Deployment**
+1. **AWS Authentication**: Copy `aws-auth-patch.template.yaml` to `aws-auth-patch.yaml` and update with your AWS account details
+2. **Grafana Password**: Set `GRAFANA_PASSWORD` environment variable to change the default password
+3. **AWS Credentials**: Configure AWS CLI with your credentials (`aws configure`)
+
+### **Security Best Practices**
+- ✅ Never commit AWS credentials or access keys
+- ✅ Use IAM roles with minimal required permissions
+- ✅ Regularly rotate passwords and access keys
+- ✅ Enable AWS CloudTrail for audit logging
+- ✅ Use VPC security groups to restrict access
 
 ## 🆘 Support
 

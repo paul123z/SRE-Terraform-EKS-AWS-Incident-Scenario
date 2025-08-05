@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aws-auth
+  namespace: kube-system
+data:
+  mapRoles: |
+    - groups:
+      - system:bootstrappers
+      - system:nodes
+      rolearn: arn:aws:iam::<AWS_ACCOUNT_ID>:role/main-eks-node-group-<TIMESTAMP>
+      username: system:node:{{EC2PrivateDNSName}}
+  mapUsers: |
+    - groups:
+      - system:masters
+      userarn: arn:aws:iam::<AWS_ACCOUNT_ID>:user/<YOUR_USERNAME>
+      username: <YOUR_USERNAME>
+
+# Instructions:
+# 1. Copy this file to aws-auth-patch.yaml
+# 2. Replace <AWS_ACCOUNT_ID> with your AWS account ID
+# 3. Replace <TIMESTAMP> with the actual timestamp from your EKS node group
+# 4. Replace <YOUR_USERNAME> with your AWS IAM username
+# 5. Apply with: kubectl apply -f aws-auth-patch.yaml 
