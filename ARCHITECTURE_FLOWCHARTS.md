@@ -82,13 +82,18 @@ graph TB
         GH_SECRETS[GitHub Secrets]
     end
     
-    subgraph "Development & CI/CD"
-        LOCAL[Local Machine]
-        GH_BUILD[GitHub Actions Build]
-        DOCKER_LOCAL[Local Docker Build]
-        DOCKER_CI[CI Docker Build]
-        TF[Terraform]
-        KUBECTL[kubectl]
+    subgraph "Development Paths"
+        subgraph "Local Development Setup"
+            LOCAL[Local Machine]
+            DOCKER_LOCAL[Local Docker Build]
+            TF[Terraform]
+            KUBECTL[kubectl]
+        end
+        
+        subgraph "CI/CD Pipeline (GitHub)"
+            GH_BUILD[GitHub Actions Build]
+            DOCKER_CI[CI Docker Build]
+        end
     end
     
     subgraph "AWS Cloud"
@@ -142,20 +147,21 @@ graph TB
         RCA_REPORT[RCA Report]
     end
     
-    %% GitHub to Local/CI
+    %% GitHub Repository to both paths
     GH -->|Clone| LOCAL
-    GH -->|Trigger| GH_ACTIONS
-    GH_ACTIONS -->|Trigger| GH_BUILD
+    GH -->|Trigger Workflow| GH_ACTIONS
+    GH_ACTIONS -->|Execute Build| GH_BUILD
     
-    %% Local Development
-    LOCAL -->|Docker Build| DOCKER_LOCAL
-    DOCKER_LOCAL -->|Push| ECR
+    %% Parallel Development Paths (side by side)
+    LOCAL -->|Build Image| DOCKER_LOCAL
+    DOCKER_LOCAL -->|Push to ECR| ECR
     
-    %% CI/CD Pipeline
-    GH_BUILD -->|Docker Build| DOCKER_CI
-    DOCKER_CI -->|Push| ECR
-    GH_ACTIONS -->|Deploy| KUBECTL
-    KUBECTL -->|Apply| DEPLOYMENT
+    GH_BUILD -->|Build Image| DOCKER_CI
+    DOCKER_CI -->|Push to ECR| ECR
+    
+    %% Deployment (Both paths converge)
+    GH_ACTIONS -->|Deploy via kubectl| KUBECTL
+    KUBECTL -->|Apply Deployment| DEPLOYMENT
     DEPLOYMENT -->|Pull Image| ECR
     
     %% Infrastructure
@@ -208,11 +214,12 @@ graph TB
     classDef k8s fill:#326CE5,stroke:#326CE5,stroke-width:2px,color:#fff
     classDef monitoring fill:#F15922,stroke:#F15922,stroke-width:2px,color:#fff
     classDef ai fill:#8B5CF6,stroke:#8B5CF6,stroke-width:2px,color:#fff
+    classDef local fill:#00D4AA,stroke:#00D4AA,stroke-width:2px,color:#fff
     
-    class GH,GH_ACTIONS,GH_SECRETS,GH_BUILD github
+    class GH,GH_ACTIONS,GH_SECRETS,GH_BUILD,DOCKER_CI github
     class VPC,PUB_SUBNET,PRIV_SUBNET,NAT,IGW,EKS,NODES,ECR,S3,LAMBDA,BEDROCK,CLOUDWATCH,ALB,TARGET_GROUP aws
     class PODS,DEPLOYMENT,SERVICE,HPA,INGRESS k8s
-    class LOCAL,DOCKER_LOCAL,DOCKER_CI,TF,KUBECTL github
+    class LOCAL,DOCKER_LOCAL,TF,KUBECTL local
     class PROMETHEUS,GRAFANA,ALERTMANAGER monitoring
     class LOGS,BEDROCK_ANALYSIS,LOCAL_FILES,RCA_REPORT ai
 ```
