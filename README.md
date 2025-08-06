@@ -89,7 +89,7 @@ This open-source SRE project consists of several interconnected components, each
 - Cost-optimized storage and resource allocation
 
 ### 🔄 **CI/CD Setup (GitHub Actions)**
-**Purpose**: Automates the build, test, and deployment process for continuous delivery.
+**Purpose**: Automates the build, test, and deployment process for application delivery.
 
 **What it automates**:
 - **Testing Phase**: Runs Node.js tests to validate application functionality
@@ -98,10 +98,13 @@ This open-source SRE project consists of several interconnected components, each
 - **Verification**: Checks deployment status and application health
 - **Multi-environment Support**: Can be extended for staging/production environments
 
+**Important**: Infrastructure provisioning is done **locally with Terraform** for security and cost control.
+
 **Key Benefits**:
-- Automated deployment pipeline reduces human error
+- Automated application deployment pipeline reduces human error
 - Consistent deployment process across environments
 - Built-in testing and validation steps
+- Infrastructure state file security (local only)
 
 ### 🚨 **Incident Simulation Setup (Scripts)**
 **Purpose**: Provides tools and scenarios for realistic incident response training.
@@ -116,6 +119,22 @@ This open-source SRE project consists of several interconnected components, each
 - Realistic training environment for SRE teams
 - Repeatable incident scenarios for consistent learning
 - Integration with real monitoring and alerting systems
+
+### 🤖 **AI-Powered Incident Response (AWS Bedrock)**
+**Purpose**: Provides intelligent incident analysis and Root Cause Analysis (RCA) using AWS Bedrock.
+
+**What it includes**:
+- **S3 Log Storage**: Secure, encrypted storage for incident logs and metrics
+- **Lambda Function**: Serverless function that analyzes logs using AWS Bedrock
+- **AI Analysis Engine**: Uses Claude 3 Sonnet for comprehensive incident analysis
+- **Automated RCA Reports**: Generates structured reports with root causes, fixes, and recommendations
+- **Real-time Log Capture**: Automatically captures logs during incident simulation
+
+**Key Benefits**:
+- Faster incident resolution with AI-powered insights
+- Comprehensive RCA reports with actionable recommendations
+- Automated analysis reduces manual investigation time
+- Historical incident analysis for continuous improvement
 
 ### 🛠️ **Utility Scripts Setup**
 **Purpose**: Provides automation for common operational tasks.
@@ -189,6 +208,40 @@ helm install prometheus prometheus-community/kube-prometheus-stack \
   --create-namespace
 ```
 
+### 4. AI-Powered Incident Response Setup (Optional)
+
+```bash
+# Build Lambda function for AI analysis FIRST
+./scripts/build-lambda.sh
+
+# Deploy AI infrastructure (S3, Lambda, IAM)
+cd terraform
+terraform apply
+cd ..
+
+# The AI system will automatically capture logs during incidents
+# and provide intelligent RCA analysis using AWS Bedrock
+```
+
+**Important**: The Lambda function must be built **before** running `terraform apply`, as Terraform needs the ZIP file to create the Lambda function.
+
+### 🖥️ **Windows Users: WSL Setup (Optional but Recommended)**
+
+**Before starting, Windows users should set up WSL:**
+```powershell
+# Check if WSL is available
+wsl --list --verbose
+
+# If not installed (run in PowerShell as Administrator):
+dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart
+dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart
+
+# Restart your computer, then:
+wsl --install -d Ubuntu
+```
+
+**After WSL installation, install the tools above in the Ubuntu environment.**
+
 ## 📊 Application Features
 
 The sample application includes:
@@ -229,6 +282,22 @@ chmod +x scripts/incident-simulator.sh
 # Run the incident simulator
 ./scripts/incident-simulator.sh
 ```
+
+### AI-Powered Incident Analysis
+
+```bash
+# Run the enhanced incident demo with AI logging
+./scripts/incident-demo.sh
+
+# Or analyze a specific incident manually
+./scripts/analyze-incident.sh -i <incident-id> -t memory_leak -r 30
+```
+
+The AI system provides:
+- **Automated Log Capture**: Real-time logging during incidents
+- **Intelligent RCA**: Root cause analysis using AWS Bedrock
+- **Actionable Insights**: Immediate fixes and preventive measures
+- **Structured Reports**: JSON-formatted analysis results
 
 ### Manual Incident Simulation
 

@@ -1,0 +1,207 @@
+
+graph TB
+    subgraph "GitHub Repository"
+        GH[GitHub Repo]
+        GH_ACTIONS[GitHub Actions]
+        GH_SECRETS[GitHub Secrets]
+    end
+    
+    subgraph "Local Development"
+        LOCAL[Local Machine]
+        DOCKER[Docker Build]
+        TF[Terraform]
+        KUBECTL[kubectl]
+    end
+    
+    subgraph "AWS Cloud"
+        subgraph "VPC & Networking"
+            VPC[VPC]
+            PUB_SUBNET[Public Subnets]
+            PRIV_SUBNET[Private Subnets]
+            NAT[NAT Gateway]
+            IGW[Internet Gateway]
+        end
+        
+        subgraph "EKS Cluster"
+            EKS[EKS Cluster]
+            NODES[Worker Nodes]
+            PODS[Application Pods]
+        end
+        
+        subgraph "AWS Services"
+            ECR[ECR Registry]
+            S3[S3 Bucket]
+            LAMBDA[Lambda Function]
+            BEDROCK[AWS Bedrock]
+            CLOUDWATCH[CloudWatch]
+        end
+        
+        subgraph "Load Balancing"
+            ALB[Application Load Balancer]
+            TARGET_GROUP[Target Groups]
+        end
+    end
+    
+    subgraph "Kubernetes Resources"
+        subgraph "Application Layer"
+            DEPLOYMENT[Deployment]
+            SERVICE[Service]
+            HPA[HPA]
+            INGRESS[Ingress]
+        end
+        
+        subgraph "Monitoring Stack"
+            PROMETHEUS[Prometheus]
+            GRAFANA[Grafana]
+            ALERTMANAGER[Alert Manager]
+        end
+    end
+    
+    subgraph "AI Incident Response"
+        LOGS[Incident Logs]
+        AI_ANALYSIS[AI Analysis]
+        RCA_REPORT[RCA Report]
+    end
+    
+    %% GitHub to Local
+    GH -->|Clone| LOCAL
+    GH -->|Trigger| GH_ACTIONS
+    
+    %% Local to AWS
+    LOCAL -->|Terraform Apply| TF
+    TF -->|Provision| VPC
+    TF -->|Create| EKS
+    TF -->|Setup| ECR
+    TF -->|Deploy| S3
+    TF -->|Create| LAMBDA
+    
+    %% CI/CD Pipeline
+    GH_ACTIONS -->|Build| DOCKER
+    DOCKER -->|Push| ECR
+    GH_ACTIONS -->|Deploy| KUBECTL
+    KUBECTL -->|Apply| DEPLOYMENT
+    
+    %% Application Flow
+    ECR -->|Pull Image| PODS
+    PODS -->|Expose| SERVICE
+    SERVICE -->|Route| ALB
+    ALB -->|Traffic| TARGET_GROUP
+    TARGET_GROUP -->|Forward| PODS
+    
+    %% Monitoring Flow
+    PODS -->|Metrics| PROMETHEUS
+    PROMETHEUS -->|Dashboards| GRAFANA
+    PROMETHEUS -->|Alerts| ALERTMANAGER
+    
+    %% Incident Response Flow
+    PODS -->|Logs| LOGS
+    LOGS -->|Upload| S3
+    S3 -->|Retrieve| LAMBDA
+    LAMBDA -->|Analyze| BEDROCK
+    BEDROCK -->|Results| AI_ANALYSIS
+    AI_ANALYSIS -->|Generate| RCA_REPORT
+    
+    %% Networking
+    VPC -->|Contains| PUB_SUBNET
+    VPC -->|Contains| PRIV_SUBNET
+    PUB_SUBNET -->|Hosts| NAT
+    PUB_SUBNET -->|Hosts| ALB
+    PRIV_SUBNET -->|Hosts| NODES
+    NAT -->|Internet Access| IGW
+    
+    %% EKS Components
+    EKS -->|Manages| NODES
+    NODES -->|Run| PODS
+    PODS -->|Managed by| DEPLOYMENT
+    DEPLOYMENT -->|Scaled by| HPA
+    
+    %% Monitoring Integration
+    PROMETHEUS -->|Scrape| PODS
+    GRAFANA -->|Query| PROMETHEUS
+    CLOUDWATCH -->|Logs| LAMBDA
+    
+    classDef github fill:#24292e,stroke:#0366d6,stroke-width:2px,color:#fff
+    classDef aws fill:#FF9900,stroke:#232F3E,stroke-width:2px,color:#000
+    classDef k8s fill:#326CE5,stroke:#326CE5,stroke-width:2px,color:#fff
+    classDef monitoring fill:#F15922,stroke:#F15922,stroke-width:2px,color:#fff
+    classDef ai fill:#8B5CF6,stroke:#8B5CF6,stroke-width:2px,color:#fff
+    
+    class GH,GH_ACTIONS,GH_SECRETS github
+    class VPC,PUB_SUBNET,PRIV_SUBNET,NAT,IGW,EKS,NODES,ECR,S3,LAMBDA,BEDROCK,CLOUDWATCH,ALB,TARGET_GROUP aws
+    class PODS,DEPLOYMENT,SERVICE,HPA,INGRESS k8s
+    class PROMETHEUS,GRAFANA,ALERTMANAGER monitoring
+    class LOGS,AI_ANALYSIS,RCA_REPORT ai
+
+graph TB
+    subgraph "Application Layer"
+        APP_PODS[Application Pods]
+        APP_METRICS[Application Metrics]
+        APP_LOGS[Application Logs]
+    end
+    
+    subgraph "Kubernetes Layer"
+        K8S_METRICS[Kubernetes Metrics]
+        K8S_EVENTS[Kubernetes Events]
+        NODE_METRICS[Node Metrics]
+    end
+    
+    subgraph "Prometheus Stack"
+        PROMETHEUS[Prometheus Server]
+        SERVICE_MONITOR[Service Monitor]
+        POD_MONITOR[Pod Monitor]
+        NODE_EXPORTER[Node Exporter]
+        KUBE_STATE_METRICS[Kube State Metrics]
+    end
+    
+    subgraph "Grafana Dashboards"
+        APP_DASHBOARD[Application Dashboard]
+        K8S_DASHBOARD[Kubernetes Dashboard]
+        NODE_DASHBOARD[Node Dashboard]
+        CUSTOM_DASHBOARD[Custom SRE Dashboard]
+    end
+    
+    subgraph "Alerting"
+        ALERT_RULES[Alert Rules]
+        ALERT_MANAGER[Alert Manager]
+        NOTIFICATIONS[Notifications]
+    end
+    
+    %% Metrics Collection
+    APP_PODS --> APP_METRICS
+    APP_PODS --> APP_LOGS
+    APP_PODS --> K8S_METRICS
+    APP_PODS --> K8S_EVENTS
+    
+    %% Prometheus Scraping
+    SERVICE_MONITOR --> APP_METRICS
+    POD_MONITOR --> APP_METRICS
+    NODE_EXPORTER --> NODE_METRICS
+    KUBE_STATE_METRICS --> K8S_METRICS
+    
+    %% Prometheus Storage
+    APP_METRICS --> PROMETHEUS
+    K8S_METRICS --> PROMETHEUS
+    NODE_METRICS --> PROMETHEUS
+    
+    %% Grafana Queries
+    PROMETHEUS --> APP_DASHBOARD
+    PROMETHEUS --> K8S_DASHBOARD
+    PROMETHEUS --> NODE_DASHBOARD
+    PROMETHEUS --> CUSTOM_DASHBOARD
+    
+    %% Alerting
+    PROMETHEUS --> ALERT_RULES
+    ALERT_RULES --> ALERT_MANAGER
+    ALERT_MANAGER --> NOTIFICATIONS
+    
+    classDef app fill:#00D4AA,stroke:#00D4AA,stroke-width:2px,color:#000
+    classDef k8s fill:#326CE5,stroke:#326CE5,stroke-width:2px,color:#fff
+    classDef prometheus fill:#E6522C,stroke:#E6522C,stroke-width:2px,color:#fff
+    classDef grafana fill:#F46800,stroke:#F46800,stroke-width:2px,color:#fff
+    classDef alerting fill:#FF6B6B,stroke:#FF6B6B,stroke-width:2px,color:#fff
+    
+    class APP_PODS,APP_METRICS,APP_LOGS app
+    class K8S_METRICS,K8S_EVENTS,NODE_METRICS k8s
+    class PROMETHEUS,SERVICE_MONITOR,POD_MONITOR,NODE_EXPORTER,KUBE_STATE_METRICS prometheus
+    class APP_DASHBOARD,K8S_DASHBOARD,NODE_DASHBOARD,CUSTOM_DASHBOARD grafana
+    class ALERT_RULES,ALERT_MANAGER,NOTIFICATIONS alerting

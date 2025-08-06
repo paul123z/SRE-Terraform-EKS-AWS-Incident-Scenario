@@ -1,0 +1,1 @@
+ctrl+shift+v #to turn on the preview

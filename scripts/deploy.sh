@@ -103,9 +103,55 @@ create_ecr_repository() {
     fi
 }
 
+# Function to build Lambda function (if needed)
+build_lambda() {
+    print_status "Building Lambda function for AI incident analysis..."
+    
+    # Check if Lambda ZIP file already exists
+    if [ -f "lambda/incident-analyzer.zip" ]; then
+        print_status "Lambda ZIP file already exists, skipping build"
+        return 0
+    fi
+    
+    # Check if Lambda directory exists
+    if [ ! -d "lambda" ]; then
+        print_error "Lambda directory not found: lambda/"
+        print_error "Please ensure the lambda directory exists with incident-analyzer.py"
+        exit 1
+    fi
+    
+    # Check if Lambda Python file exists
+    if [ ! -f "lambda/incident-analyzer.py" ]; then
+        print_error "Lambda Python file not found: lambda/incident-analyzer.py"
+        print_error "Please ensure the lambda directory contains incident-analyzer.py"
+        exit 1
+    fi
+    
+    # Check if build script exists
+    if [ ! -f "scripts/build-lambda.sh" ]; then
+        print_error "Lambda build script not found: scripts/build-lambda.sh"
+        print_error "Please ensure the build-lambda.sh script exists"
+        exit 1
+    fi
+    
+    # Build Lambda function
+    ./scripts/build-lambda.sh
+    
+    # Verify ZIP file was created
+    if [ ! -f "lambda/incident-analyzer.zip" ]; then
+        print_error "Lambda build failed - ZIP file not created"
+        exit 1
+    fi
+    
+    print_success "Lambda function built successfully"
+}
+
 # Function to deploy infrastructure
 deploy_infrastructure() {
     print_status "Deploying infrastructure with Terraform..."
+    
+    # Build Lambda function first (as per YouTube guide)
+    build_lambda
     
     cd terraform
     
@@ -133,6 +179,19 @@ deploy_infrastructure() {
 build_and_push_app() {
     print_status "Building and pushing application..."
     
+    # Check if app directory and Dockerfile exist
+    if [ ! -d "app" ]; then
+        print_error "App directory not found: app/"
+        print_error "Please ensure the app directory exists"
+        exit 1
+    fi
+    
+    if [ ! -f "app/Dockerfile" ]; then
+        print_error "Dockerfile not found: app/Dockerfile"
+        print_error "Please ensure the app directory contains a Dockerfile"
+        exit 1
+    fi
+    
     cd app
     
     # Build the Docker image
@@ -159,9 +218,17 @@ build_and_push_app() {
 deploy_application() {
     print_status "Deploying application with Helm..."
     
+    # Check if Helm chart directory exists
+    if [ ! -d "helm/sre-demo-app" ]; then
+        print_error "Helm chart directory not found: helm/sre-demo-app/"
+        print_error "Please ensure the helm/sre-demo-app directory exists"
+        exit 1
+    fi
+    
     cd helm/sre-demo-app
     
     # Install the application
+    print_status "Installing application with Helm..."
     helm upgrade --install $APP_NAME . \
         --set image.repository=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY \
         --set image.tag=latest \
@@ -172,12 +239,51 @@ deploy_application() {
     
     cd ../..
     
+    # Verify service was created
+    print_status "Verifying service creation..."
+    if ! kubectl get svc $APP_NAME -n $NAMESPACE &> /dev/null; then
+        print_warning "Service was not created by Helm. Creating manually..."
+        
+        # Create service manually
+        kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Service
+metadata:
+  name: $APP_NAME
+  namespace: $NAMESPACE
+  labels:
+    app.kubernetes.io/name: $APP_NAME
+    app.kubernetes.io/instance: $APP_NAME
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 80
+      targetPort: 3000
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: $APP_NAME
+    app.kubernetes.io/instance: $APP_NAME
+EOF
+        
+        print_success "Service created manually"
+    else
+        print_success "Service created successfully by Helm"
+    fi
+    
     print_success "Application deployed successfully"
 }
 
 # Function to setup monitoring
 setup_monitoring() {
     print_status "Setting up monitoring..."
+    
+    # Check if monitoring configuration exists
+    if [ ! -f "monitoring/prometheus-values.yaml" ]; then
+        print_error "Monitoring configuration not found: monitoring/prometheus-values.yaml"
+        print_error "Please ensure the monitoring directory contains the prometheus-values.yaml file"
+        exit 1
+    fi
     
     # Install EBS CSI Driver for persistent volume support
     print_status "Installing EBS CSI Driver..."
@@ -229,6 +335,40 @@ setup_monitoring() {
         --timeout 15m
     
     print_success "Monitoring setup completed"
+    
+    # Install Kubernetes Dashboard
+    print_status "Installing Kubernetes Dashboard..."
+    
+    # Install the dashboard
+    kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.7.0/aio/deploy/recommended.yaml
+    
+    # Create admin service account
+    kubectl apply -f - <<EOF
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: dashboard-admin
+  namespace: kubernetes-dashboard
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: dashboard-admin
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+- kind: ServiceAccount
+  name: dashboard-admin
+  namespace: kubernetes-dashboard
+EOF
+    
+    # Wait for dashboard pods to be ready
+    print_status "Waiting for Kubernetes Dashboard to be ready..."
+    kubectl wait --for=condition=ready pod -l app=kubernetes-dashboard -n kubernetes-dashboard --timeout=120s
+    
+    print_success "Kubernetes Dashboard installed successfully"
 }
 
 # Function to verify deployment
@@ -236,22 +376,127 @@ verify_deployment() {
     print_status "Verifying deployment..."
     
     # Check if pods are running
+    print_status "Waiting for pods to be ready..."
     $KUBECTL_CMD wait --for=condition=ready pod -l app.kubernetes.io/name=$APP_NAME -n $NAMESPACE --timeout=300s
     
     # Check service
+    print_status "Checking service status..."
     $KUBECTL_CMD get svc $APP_NAME -n $NAMESPACE
     
     # Check HPA
+    print_status "Checking Horizontal Pod Autoscaler..."
     $KUBECTL_CMD get hpa -n $NAMESPACE
     
-    # Get service URL
-    SERVICE_URL=$($KUBECTL_CMD get svc $APP_NAME -n $NAMESPACE -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+    # Wait for load balancer to be provisioned
+    print_status "Waiting for load balancer to be provisioned..."
+    local max_attempts=30
+    local attempt=0
+    
+    while [ $attempt -lt $max_attempts ]; do
+        SERVICE_URL=$($KUBECTL_CMD get svc $APP_NAME -n $NAMESPACE -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
+        if [ -n "$SERVICE_URL" ]; then
+            break
+        fi
+        
+        SERVICE_URL=$($KUBECTL_CMD get svc $APP_NAME -n $NAMESPACE -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+        if [ -n "$SERVICE_URL" ]; then
+            break
+        fi
+        
+        print_status "Load balancer still provisioning... (attempt $((attempt + 1))/$max_attempts)"
+        sleep 10
+        attempt=$((attempt + 1))
+    done
+    
     if [ -z "$SERVICE_URL" ]; then
-        SERVICE_URL=$($KUBECTL_CMD get svc $APP_NAME -n $NAMESPACE -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+        print_warning "Load balancer URL not available yet. It may take a few more minutes."
+        print_status "You can check the status with: kubectl get svc $APP_NAME -n $NAMESPACE"
+    else
+        print_success "Load balancer URL obtained: $SERVICE_URL"
     fi
     
     print_success "Deployment verified successfully"
-    print_status "Application URL: http://$SERVICE_URL"
+    if [ -n "$SERVICE_URL" ]; then
+        print_status "Application URL: http://$SERVICE_URL"
+    fi
+}
+
+# Function to validate demo scripts
+validate_demo_scripts() {
+    print_status "Validating demo scripts..."
+    
+    local missing_scripts=()
+    
+    # Check for required demo scripts
+    if [ ! -f "scripts/incident-demo.sh" ]; then
+        missing_scripts+=("scripts/incident-demo.sh")
+    fi
+    
+    if [ ! -f "scripts/analyze-incident.sh" ]; then
+        missing_scripts+=("scripts/analyze-incident.sh")
+    fi
+    
+    if [ ! -f "scripts/teardown.sh" ]; then
+        missing_scripts+=("scripts/teardown.sh")
+    fi
+    
+    if [ ! -f "scripts/teardown-verify.sh" ]; then
+        missing_scripts+=("scripts/teardown-verify.sh")
+    fi
+    
+    if [ ${#missing_scripts[@]} -gt 0 ]; then
+        print_warning "Some demo scripts are missing:"
+        for script in "${missing_scripts[@]}"; do
+            echo "  - $script"
+        done
+        print_warning "These scripts are used in the YouTube presentation guide"
+        print_warning "The deployment will continue, but some demo features may not work"
+    else
+        print_success "All demo scripts are available"
+    fi
+}
+
+# Function to validate Helm chart
+validate_helm_chart() {
+    print_status "Validating Helm chart..."
+    
+    local missing_templates=()
+    
+    # Check for required Helm templates
+    if [ ! -f "helm/sre-demo-app/templates/deployment.yaml" ]; then
+        missing_templates+=("helm/sre-demo-app/templates/deployment.yaml")
+    fi
+    
+    if [ ! -f "helm/sre-demo-app/templates/service.yaml" ]; then
+        missing_templates+=("helm/sre-demo-app/templates/service.yaml")
+    fi
+    
+    if [ ! -f "helm/sre-demo-app/templates/serviceaccount.yaml" ]; then
+        missing_templates+=("helm/sre-demo-app/templates/serviceaccount.yaml")
+    fi
+    
+    if [ ! -f "helm/sre-demo-app/templates/hpa.yaml" ]; then
+        missing_templates+=("helm/sre-demo-app/templates/hpa.yaml")
+    fi
+    
+    if [ ! -f "helm/sre-demo-app/values.yaml" ]; then
+        missing_templates+=("helm/sre-demo-app/values.yaml")
+    fi
+    
+    if [ ! -f "helm/sre-demo-app/Chart.yaml" ]; then
+        missing_templates+=("helm/sre-demo-app/Chart.yaml")
+    fi
+    
+    if [ ${#missing_templates[@]} -gt 0 ]; then
+        print_error "Helm chart is incomplete. Missing templates:"
+        for template in "${missing_templates[@]}"; do
+            echo "  - $template"
+        done
+        print_error "Please ensure all Helm chart templates are present"
+        exit 1
+    else
+        print_success "Helm chart is complete"
+    fi
 }
 
 # Function to show next steps
@@ -261,9 +506,11 @@ show_next_steps() {
     echo ""
     print_status "Next steps:"
     echo "1. Access your application: http://$SERVICE_URL"
-    echo "2. Run incident simulations: ./scripts/incident-simulator.sh"
+    echo "2. Run incident simulations: ./scripts/incident-demo.sh"
     echo "3. Access Grafana dashboard: kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80"
-    echo "4. Monitor your application: kubectl get pods -l app.kubernetes.io/name=$APP_NAME"
+    echo "4. Access Kubernetes Dashboard: ./scripts/access-dashboard.sh (automated setup and access)"
+    echo "5. Or manually: kubectl proxy + ./scripts/get-dashboard-token.sh"
+    echo "6. Monitor your application: kubectl get pods -l app.kubernetes.io/name=$APP_NAME"
     echo ""
     print_status "Useful commands:"
     echo "- Check application logs: kubectl logs -l app.kubernetes.io/name=$APP_NAME"
@@ -271,10 +518,14 @@ show_next_steps() {
     echo "- Scale application: kubectl scale deployment $APP_NAME --replicas=3"
     echo "- Restart application: kubectl rollout restart deployment $APP_NAME"
     echo ""
+    print_status "AI Incident Analysis (as per YouTube guide):"
+    echo "- Run enhanced incident demo: ./scripts/incident-demo.sh"
+    echo "- Analyze incidents with AI: ./scripts/analyze-incident.sh -i <incident-id>"
+    echo ""
     print_warning "Remember to clean up resources when done:"
-    echo "- helm uninstall $APP_NAME"
-    echo "- helm uninstall prometheus -n monitoring"
-    echo "- cd terraform && terraform destroy"
+    echo "- Automated cleanup: ./scripts/teardown.sh"
+    echo "- Verify cleanup: ./scripts/teardown-verify.sh"
+    echo "- Manual cleanup: helm uninstall $APP_NAME && helm uninstall prometheus -n monitoring && cd terraform && terraform destroy"
     echo ""
 }
 
@@ -285,6 +536,12 @@ main() {
     
     # Check prerequisites
     check_prerequisites
+    
+    # Validate demo scripts (as per YouTube guide)
+    validate_demo_scripts
+    
+    # Validate Helm chart
+    validate_helm_chart
     
     # Get AWS account ID
     get_aws_account_id

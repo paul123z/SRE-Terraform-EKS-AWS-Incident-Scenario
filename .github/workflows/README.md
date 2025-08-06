@@ -4,23 +4,24 @@ This directory contains GitHub Actions workflows for the SRE Demo project. All w
 
 ## 📋 Available Workflows
 
-### **1. `deploy.yml` - Full Infrastructure & Application Deployment**
-**Purpose**: Complete end-to-end deployment of the entire SRE demo environment.
+### **1. `deploy.yml` - Full Application Deployment**
+**Purpose**: Complete application deployment to existing EKS infrastructure.
 
 **Trigger**: Manual (`workflow_dispatch`)
 
 **What it does**:
 - ✅ **Testing**: Runs Node.js application tests
-- ✅ **Infrastructure**: Deploys EKS cluster, VPC, networking via Terraform
 - ✅ **Building**: Builds Docker image from `app/` directory
 - ✅ **Pushing**: Pushes image to ECR with `latest` tag
 - ✅ **Deploying**: Deploys application using Helm charts
 - ✅ **Monitoring**: Installs Prometheus, Grafana, Metrics Server
 - ✅ **Verification**: Checks deployment status and health
 
-**Use case**: Initial setup or complete redeployment of the entire environment.
+**Use case**: Application deployment after infrastructure is already provisioned.
 
-**Estimated runtime**: 15-20 minutes
+**Prerequisites**: EKS cluster and infrastructure must be deployed via local Terraform.
+
+**Estimated runtime**: 10-15 minutes
 
 **Required secrets**:
 - `AWS_ACCESS_KEY_ID`
@@ -77,7 +78,37 @@ This directory contains GitHub Actions workflows for the SRE Demo project. All w
 
 ## 🚀 How to Use
 
-### **Running Workflows**
+### **Infrastructure Setup (Local Terraform Only)**
+
+**Important**: Infrastructure provisioning is done **locally only** to maintain state file security.
+
+```bash
+# 1. Clone the repository
+git clone <your-repo-url>
+cd SRE-Terraform-EKS-AWS-Incident-Scenario
+
+# 2. Deploy infrastructure locally
+cd terraform
+terraform init
+terraform plan
+terraform apply
+
+# 3. Configure kubectl
+aws eks update-kubeconfig --region eu-central-1 --name sre-incident-demo-cluster
+
+# 4. Verify infrastructure
+kubectl get nodes
+```
+
+**Why local Terraform only?**
+- ✅ **State file security**: No sensitive data in cloud
+- ✅ **Cost control**: Full control over infrastructure lifecycle
+- ✅ **No state file issues**: State stays on your machine
+- ✅ **Easy cleanup**: Simple `terraform destroy` command
+
+### **Application Deployment (GitHub Actions)**
+
+After infrastructure is deployed locally, use GitHub Actions for application deployment:
 
 1. **Go to your GitHub repository**
 2. **Navigate to Actions tab**
@@ -89,10 +120,10 @@ This directory contains GitHub Actions workflows for the SRE Demo project. All w
 
 | Scenario | Use This Workflow | When |
 |----------|------------------|------|
-| **First time setup** | `deploy.yml` | Initial deployment |
+| **First time setup** | Local Terraform + `deploy.yml` | Infrastructure + Application |
 | **Code changes** | `build-push-deploy-app.yml` | After updating application code |
 | **Redeploy same image** | `deploy-app-only.yml` | Configuration changes only |
-| **Complete rebuild** | `deploy.yml` | Full environment refresh |
+| **Complete rebuild** | `deploy.yml` | Full application refresh |
 
 ---
 

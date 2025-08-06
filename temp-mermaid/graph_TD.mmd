@@ -1,0 +1,230 @@
+
+graph TD
+    subgraph "Terraform Execution"
+        TF_INIT[terraform init]
+        TF_PLAN[terraform plan]
+        TF_APPLY[terraform apply]
+    end
+    
+    subgraph "AWS Resources Created"
+        subgraph "Networking"
+            VPC[VPC Creation]
+            SUBNETS[Subnets Creation]
+            ROUTE_TABLES[Route Tables]
+            NAT_GW[NAT Gateway]
+            IGW[Internet Gateway]
+            SECURITY_GROUPS[Security Groups]
+        end
+        
+        subgraph "EKS Cluster"
+            EKS_CLUSTER[EKS Cluster]
+            NODE_GROUPS[Node Groups]
+            IAM_ROLES[IAM Roles]
+            CLUSTER_ROLE[Cluster IAM Role]
+            NODE_ROLE[Node IAM Role]
+        end
+        
+        subgraph "Supporting Services"
+            ECR_REPO[ECR Repository]
+            S3_BUCKET[S3 Bucket]
+            LAMBDA_FUNC[Lambda Function]
+            CLOUDWATCH_LOGS[CloudWatch Logs]
+        end
+    end
+    
+    subgraph "Configuration"
+        KUBECONFIG[Update kubeconfig]
+        HELM_REPO[Add Helm repos]
+        NAMESPACES[Create namespaces]
+    end
+    
+    %% Flow
+    TF_INIT --> TF_PLAN
+    TF_PLAN --> TF_APPLY
+    
+    TF_APPLY --> VPC
+    VPC --> SUBNETS
+    SUBNETS --> ROUTE_TABLES
+    ROUTE_TABLES --> NAT_GW
+    NAT_GW --> IGW
+    VPC --> SECURITY_GROUPS
+    
+    TF_APPLY --> EKS_CLUSTER
+    EKS_CLUSTER --> NODE_GROUPS
+    EKS_CLUSTER --> IAM_ROLES
+    IAM_ROLES --> CLUSTER_ROLE
+    IAM_ROLES --> NODE_ROLE
+    
+    TF_APPLY --> ECR_REPO
+    TF_APPLY --> S3_BUCKET
+    TF_APPLY --> LAMBDA_FUNC
+    LAMBDA_FUNC --> CLOUDWATCH_LOGS
+    
+    EKS_CLUSTER --> KUBECONFIG
+    KUBECONFIG --> HELM_REPO
+    HELM_REPO --> NAMESPACES
+    
+    classDef terraform fill:#7B42BC,stroke:#7B42BC,stroke-width:2px,color:#fff
+    classDef aws fill:#FF9900,stroke:#232F3E,stroke-width:2px,color:#000
+    classDef config fill:#326CE5,stroke:#326CE5,stroke-width:2px,color:#fff
+    
+    class TF_INIT,TF_PLAN,TF_APPLY terraform
+    class VPC,SUBNETS,ROUTE_TABLES,NAT_GW,IGW,SECURITY_GROUPS,EKS_CLUSTER,NODE_GROUPS,IAM_ROLES,CLUSTER_ROLE,NODE_ROLE,ECR_REPO,S3_BUCKET,LAMBDA_FUNC,CLOUDWATCH_LOGS aws
+    class KUBECONFIG,HELM_REPO,NAMESPACES config
+
+graph TD
+    subgraph "Docker Image"
+        DOCKERFILE[Dockerfile]
+        APP_CODE[Node.js Application]
+        DOCKER_IMAGE[Docker Image]
+    end
+    
+    subgraph "ECR Registry"
+        ECR_REPO[ECR Repository]
+        IMAGE_TAG[Image Tag]
+    end
+    
+    subgraph "Kubernetes Deployment"
+        HELM_CHART[Helm Chart]
+        DEPLOYMENT[Deployment]
+        SERVICE[Service]
+        HPA[HPA]
+        INGRESS[Ingress]
+    end
+    
+    subgraph "EKS Cluster"
+        NODES[Worker Nodes]
+        PODS[Application Pods]
+        LOAD_BALANCER[Load Balancer]
+    end
+    
+    %% Docker Build
+    DOCKERFILE --> DOCKER_IMAGE
+    APP_CODE --> DOCKER_IMAGE
+    
+    %% ECR Push
+    DOCKER_IMAGE --> ECR_REPO
+    ECR_REPO --> IMAGE_TAG
+    
+    %% Kubernetes Deploy
+    HELM_CHART --> DEPLOYMENT
+    DEPLOYMENT --> PODS
+    PODS --> SERVICE
+    SERVICE --> LOAD_BALANCER
+    DEPLOYMENT --> HPA
+    SERVICE --> INGRESS
+    
+    %% Node Scheduling
+    NODES --> PODS
+    
+    %% Health Checks
+    PODS -->|Health Check| HEALTH[Health Status]
+    HEALTH -->|Ready| READY[✅ Ready]
+    HEALTH -->|Not Ready| NOT_READY[❌ Not Ready]
+    
+    classDef docker fill:#2496ED,stroke:#2496ED,stroke-width:2px,color:#fff
+    classDef ecr fill:#FF9900,stroke:#232F3E,stroke-width:2px,color:#000
+    classDef k8s fill:#326CE5,stroke:#326CE5,stroke-width:2px,color:#fff
+    classDef health fill:#00D4AA,stroke:#00D4AA,stroke-width:2px,color:#000
+    
+    class DOCKERFILE,APP_CODE,DOCKER_IMAGE docker
+    class ECR_REPO,IMAGE_TAG ecr
+    class HELM_CHART,DEPLOYMENT,SERVICE,HPA,INGRESS,NODES,PODS,LOAD_BALANCER k8s
+    class HEALTH,READY,NOT_READY health
+
+graph TD
+    subgraph "Incident Trigger"
+        INCIDENT_DEMO[incident-demo.sh]
+        MEMORY_LEAK[Memory Leak Simulation]
+        CPU_STRESS[CPU Stress Simulation]
+        HEALTH_FAILURE[Health Check Failure]
+    end
+    
+    subgraph "Data Collection"
+        APP_LOGS[Application Logs]
+        K8S_LOGS[Kubernetes Logs]
+        METRICS[Resource Metrics]
+        EVENTS[Kubernetes Events]
+    end
+    
+    subgraph "Local Processing"
+        LOG_DIR[Local Log Directory]
+        INCIDENT_ID[Incident ID Generation]
+        LOG_FILES[Log Files]
+    end
+    
+    subgraph "S3 Storage"
+        S3_BUCKET[S3 Bucket]
+        INCIDENT_FOLDER[incidents folder]
+        LOG_UPLOAD[Log Upload]
+    end
+    
+    subgraph "AI Analysis"
+        LAMBDA[Lambda Function]
+        BEDROCK[AWS Bedrock]
+        CLAUDE[Claude 3 Sonnet]
+        AI_ANALYSIS[AI Analysis]
+    end
+    
+    subgraph "RCA Report"
+        INCIDENT_SUMMARY[Incident Summary]
+        ROOT_CAUSE[Root Cause Analysis]
+        IMMEDIATE_FIXES[Immediate Fixes]
+        PREVENTIVE_MEASURES[Preventive Measures]
+        LESSONS_LEARNED[Lessons Learned]
+        RECOMMENDATIONS[Recommendations]
+    end
+    
+    %% Incident Simulation
+    INCIDENT_DEMO --> MEMORY_LEAK
+    INCIDENT_DEMO --> CPU_STRESS
+    INCIDENT_DEMO --> HEALTH_FAILURE
+    
+    %% Data Collection
+    MEMORY_LEAK --> APP_LOGS
+    CPU_STRESS --> APP_LOGS
+    HEALTH_FAILURE --> APP_LOGS
+    
+    APP_LOGS --> K8S_LOGS
+    APP_LOGS --> METRICS
+    APP_LOGS --> EVENTS
+    
+    %% Local Processing
+    APP_LOGS --> LOG_DIR
+    K8S_LOGS --> LOG_DIR
+    METRICS --> LOG_DIR
+    EVENTS --> LOG_DIR
+    
+    LOG_DIR --> INCIDENT_ID
+    INCIDENT_ID --> LOG_FILES
+    
+    %% S3 Upload
+    LOG_FILES --> S3_BUCKET
+    S3_BUCKET --> INCIDENT_FOLDER
+    INCIDENT_FOLDER --> LOG_UPLOAD
+    
+    %% AI Analysis
+    LOG_UPLOAD --> LAMBDA
+    LAMBDA --> BEDROCK
+    BEDROCK --> CLAUDE
+    CLAUDE --> AI_ANALYSIS
+    
+    %% Report Generation
+    AI_ANALYSIS --> INCIDENT_SUMMARY
+    AI_ANALYSIS --> ROOT_CAUSE
+    AI_ANALYSIS --> IMMEDIATE_FIXES
+    AI_ANALYSIS --> PREVENTIVE_MEASURES
+    AI_ANALYSIS --> LESSONS_LEARNED
+    AI_ANALYSIS --> RECOMMENDATIONS
+    
+    classDef incident fill:#FF6B6B,stroke:#FF6B6B,stroke-width:2px,color:#fff
+    classDef data fill:#00D4AA,stroke:#00D4AA,stroke-width:2px,color:#000
+    classDef storage fill:#FF9900,stroke:#232F3E,stroke-width:2px,color:#000
+    classDef ai fill:#8B5CF6,stroke:#8B5CF6,stroke-width:2px,color:#fff
+    classDef report fill:#10B981,stroke:#10B981,stroke-width:2px,color:#fff
+    
+    class INCIDENT_DEMO,MEMORY_LEAK,CPU_STRESS,HEALTH_FAILURE incident
+    class APP_LOGS,K8S_LOGS,METRICS,EVENTS,LOG_DIR,INCIDENT_ID,LOG_FILES data
+    class S3_BUCKET,INCIDENT_FOLDER,LOG_UPLOAD storage
+    class LAMBDA,BEDROCK,CLAUDE,AI_ANALYSIS ai
+    class INCIDENT_SUMMARY,ROOT_CAUSE,IMMEDIATE_FIXES,PREVENTIVE_MEASURES,LESSONS_LEARNED,RECOMMENDATIONS report

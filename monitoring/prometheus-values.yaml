@@ -39,7 +39,7 @@ alertmanager:
 
 grafana:
   enabled: true
-  adminPassword: ${GRAFANA_PASSWORD:-<GRAFANA_PASSWORD>}
+  adminPassword: admin123
   persistence:
     enabled: true
     storageClassName: gp2
@@ -73,6 +73,7 @@ grafana:
             "dashboard": {
               "id": null,
               "title": "SRE Demo Dashboard",
+              "uid": "sre-demo-dashboard",
               "tags": ["sre", "demo"],
               "timezone": "browser",
               "panels": [

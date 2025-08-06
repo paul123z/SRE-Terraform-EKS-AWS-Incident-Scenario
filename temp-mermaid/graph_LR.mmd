@@ -1,0 +1,134 @@
+
+graph LR
+    subgraph "GitHub Repository"
+        CODE[Source Code]
+        WORKFLOW[GitHub Actions Workflow]
+        SECRETS[AWS Credentials]
+    end
+    
+    subgraph "Build Phase"
+        DOCKER_BUILD[Docker Build]
+        DOCKER_TAG[Docker Tag]
+        DOCKER_PUSH[Docker Push to ECR]
+    end
+    
+    subgraph "Deploy Phase"
+        HELM_UPDATE[Helm Update]
+        K8S_DEPLOY[Kubernetes Deploy]
+        HEALTH_CHECK[Health Check]
+    end
+    
+    subgraph "AWS Services"
+        ECR[ECR Registry]
+        EKS[EKS Cluster]
+    end
+    
+    %% Triggers
+    CODE -->|Push to main| WORKFLOW
+    WORKFLOW -->|Manual trigger| SECRETS
+    
+    %% Build Process
+    WORKFLOW --> DOCKER_BUILD
+    DOCKER_BUILD --> DOCKER_TAG
+    DOCKER_TAG --> DOCKER_PUSH
+    DOCKER_PUSH --> ECR
+    
+    %% Deploy Process
+    WORKFLOW --> HELM_UPDATE
+    HELM_UPDATE --> K8S_DEPLOY
+    K8S_DEPLOY --> EKS
+    K8S_DEPLOY --> HEALTH_CHECK
+    
+    %% Verification
+    HEALTH_CHECK -->|Success| SUCCESS[✅ Deployment Success]
+    HEALTH_CHECK -->|Failure| FAILURE[❌ Deployment Failed]
+    
+    classDef github fill:#24292e,stroke:#0366d6,stroke-width:2px,color:#fff
+    classDef build fill:#00D4AA,stroke:#00D4AA,stroke-width:2px,color:#000
+    classDef deploy fill:#FF6B6B,stroke:#FF6B6B,stroke-width:2px,color:#fff
+    classDef aws fill:#FF9900,stroke:#232F3E,stroke-width:2px,color:#000
+    
+    class CODE,WORKFLOW,SECRETS github
+    class DOCKER_BUILD,DOCKER_TAG,DOCKER_PUSH build
+    class HELM_UPDATE,K8S_DEPLOY,HEALTH_CHECK deploy
+    class ECR,EKS aws
+
+graph LR
+    subgraph "User Interaction"
+        USER[User/Developer]
+        GITHUB[GitHub Repository]
+        LOCAL[Local Machine]
+    end
+    
+    subgraph "Infrastructure Layer"
+        TERRAFORM[Terraform]
+        AWS[AWS Services]
+        EKS[EKS Cluster]
+    end
+    
+    subgraph "Application Layer"
+        DOCKER[Docker]
+        ECR[ECR Registry]
+        K8S[Kubernetes]
+        APP[Application]
+    end
+    
+    subgraph "Monitoring Layer"
+        PROMETHEUS[Prometheus]
+        GRAFANA[Grafana]
+        ALERTS[Alerts]
+    end
+    
+    subgraph "AI Layer"
+        LOGS[Logs]
+        S3[S3 Storage]
+        LAMBDA[Lambda]
+        BEDROCK[Bedrock]
+        RCA[RCA Report]
+    end
+    
+    %% User Flow
+    USER -->|Push Code| GITHUB
+    USER -->|Deploy| LOCAL
+    USER -->|Monitor| GRAFANA
+    USER -->|Analyze| RCA
+    
+    %% Infrastructure Flow
+    LOCAL -->|Terraform Apply| TERRAFORM
+    TERRAFORM -->|Provision| AWS
+    AWS -->|Create| EKS
+    
+    %% Application Flow
+    LOCAL -->|Docker Build| DOCKER
+    DOCKER -->|Push| ECR
+    ECR -->|Pull| K8S
+    K8S -->|Deploy| APP
+    
+    %% Monitoring Flow
+    APP -->|Metrics| PROMETHEUS
+    PROMETHEUS -->|Dashboards| GRAFANA
+    PROMETHEUS -->|Alerts| ALERTS
+    
+    %% AI Analysis Flow
+    APP -->|Logs| LOGS
+    LOGS -->|Store| S3
+    S3 -->|Retrieve| LAMBDA
+    LAMBDA -->|Analyze| BEDROCK
+    BEDROCK -->|Generate| RCA
+    
+    %% Feedback Loops
+    ALERTS -->|Notify| USER
+    RCA -->|Insights| USER
+    GRAFANA -->|Visualize| USER
+    
+    classDef user fill:#6366F1,stroke:#6366F1,stroke-width:2px,color:#fff
+    classDef infra fill:#7B42BC,stroke:#7B42BC,stroke-width:2px,color:#fff
+    classDef app fill:#00D4AA,stroke:#00D4AA,stroke-width:2px,color:#000
+    classDef monitoring fill:#F15922,stroke:#F15922,stroke-width:2px,color:#fff
+    classDef ai fill:#8B5CF6,stroke:#8B5CF6,stroke-width:2px,color:#fff
+    
+    class USER,GITHUB,LOCAL user
+    class TERRAFORM,AWS,EKS infra
+    class DOCKER,ECR,K8S,APP app
+    class PROMETHEUS,GRAFANA,ALERTS monitoring
+    class LOGS,S3,LAMBDA,BEDROCK,RCA ai

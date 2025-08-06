@@ -37,6 +37,11 @@ NAMESPACE="default"
 AWS_CMD=$(command -v aws || echo "/usr/local/bin/aws")
 KUBECTL_CMD=$(command -v kubectl || echo "/usr/local/bin/kubectl")
 
+# AI Incident Response Configuration
+INCIDENT_ID="demo-incident-$(date +%Y%m%d-%H%M%S)"
+S3_BUCKET=""
+LOG_DIR="/tmp/incident-logs"
+
 # Function to get service URL
 get_service_url() {
     $KUBECTL_CMD get svc sre-demo-app -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "localhost:8080"
@@ -95,10 +100,139 @@ show_events() {
     echo ""
 }
 
+# Function to get S3 bucket name from Terraform
+get_s3_bucket_name() {
+    if command -v terraform &> /dev/null; then
+        cd terraform
+        BUCKET_NAME=$(terraform output -raw incident_logs_bucket 2>/dev/null || echo "")
+        cd - > /dev/null
+        
+        if [ -n "$BUCKET_NAME" ]; then
+            echo "$BUCKET_NAME"
+            return
+        fi
+    fi
+    
+    # Fallback to default name pattern
+    echo "sre-incident-demo-incident-logs-$(date +%s)"
+}
+
+# Function to initialize logging
+init_logging() {
+    print_status "Initializing AI incident logging..."
+    
+    # Get S3 bucket name
+    S3_BUCKET=$(get_s3_bucket_name)
+    print_status "Using S3 bucket: $S3_BUCKET"
+    
+    # Create log directory
+    mkdir -p "$LOG_DIR"
+    
+    # Create incident log file
+    INCIDENT_LOG_FILE="$LOG_DIR/incident-$INCIDENT_ID.log"
+    touch "$INCIDENT_LOG_FILE"
+    
+    print_success "Logging initialized: $INCIDENT_LOG_FILE"
+}
+
+# Function to log incident data
+log_incident_data() {
+    local phase="$1"
+    local message="$2"
+    local data="$3"
+    
+    local timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    local log_entry="[$timestamp] [$phase] $message"
+    
+    echo "$log_entry" >> "$INCIDENT_LOG_FILE"
+    
+    if [ -n "$data" ]; then
+        echo "$data" >> "$INCIDENT_LOG_FILE"
+        echo "" >> "$INCIDENT_LOG_FILE"
+    fi
+}
+
+# Function to capture application logs
+capture_app_logs() {
+    local phase="$1"
+    
+    print_status "Capturing application logs for phase: $phase"
+    
+    # Get pod logs
+    local pod_logs
+    pod_logs=$($KUBECTL_CMD logs -l app.kubernetes.io/name=sre-demo-app --tail=50 2>/dev/null || echo "No logs available")
+    
+    # Get pod status
+    local pod_status
+    pod_status=$($KUBECTL_CMD get pods -l app.kubernetes.io/name=sre-demo-app -o wide 2>/dev/null || echo "No pod status available")
+    
+    # Get resource usage
+    local resource_usage
+    resource_usage=$($KUBECTL_CMD top pods -l app.kubernetes.io/name=sre-demo-app 2>/dev/null || echo "No resource usage available")
+    
+    # Get events
+    local events
+    events=$($KUBECTL_CMD get events --sort-by='.lastTimestamp' --field-selector involvedObject.name=sre-demo-app 2>/dev/null || echo "No events available")
+    
+    # Log all data
+    log_incident_data "$phase" "Application logs captured" "=== POD LOGS ===\n$pod_logs\n\n=== POD STATUS ===\n$pod_status\n\n=== RESOURCE USAGE ===\n$resource_usage\n\n=== EVENTS ===\n$events"
+}
+
+# Function to capture metrics snapshot
+capture_metrics_snapshot() {
+    local phase="$1"
+    
+    print_status "Capturing metrics snapshot for phase: $phase"
+    
+    # Get service URL
+    local url=$(get_service_url)
+    
+    # Capture application metrics
+    local health_status
+    health_status=$(curl -s http://$url/health 2>/dev/null || echo "Health check failed")
+    
+    local memory_status
+    memory_status=$(curl -s http://$url/api/memory-status 2>/dev/null || echo "Memory status check failed")
+    
+    # Log metrics
+    log_incident_data "$phase" "Metrics snapshot captured" "=== HEALTH STATUS ===\n$health_status\n\n=== MEMORY STATUS ===\n$memory_status"
+}
+
+# Function to upload logs to S3
+upload_logs_to_s3() {
+    print_status "Uploading incident logs to S3..."
+    
+    if [ -z "$S3_BUCKET" ]; then
+        print_warning "S3 bucket not configured, skipping upload"
+        return
+    fi
+    
+    # Upload main incident log
+    if [ -f "$INCIDENT_LOG_FILE" ]; then
+        $AWS_CMD s3 cp "$INCIDENT_LOG_FILE" "s3://$S3_BUCKET/incidents/$INCIDENT_ID/incident-log.txt" --region "$AWS_REGION" 2>/dev/null || {
+            print_warning "Failed to upload incident log to S3"
+            return
+        }
+    fi
+    
+    # Upload all log files in the directory
+    for log_file in "$LOG_DIR"/*; do
+        if [ -f "$log_file" ]; then
+            local filename=$(basename "$log_file")
+            $AWS_CMD s3 cp "$log_file" "s3://$S3_BUCKET/incidents/$INCIDENT_ID/$filename" --region "$AWS_REGION" 2>/dev/null || {
+                print_warning "Failed to upload $filename to S3"
+            }
+        fi
+    done
+    
+    print_success "Logs uploaded to S3: s3://$S3_BUCKET/incidents/$INCIDENT_ID/"
+    print_status "Incident ID for AI analysis: $INCIDENT_ID"
+}
+
 # Main demo function
 demo_incident() {
     echo ""
-    print_status "=== SRE Incident Detection & Resolution Demo ==="
+    print_warning "=== SRE Incident Detection & Resolution Demo ==="
     echo ""
     print_status "This demo will walk through a complete incident scenario:"
     echo "1. Initial healthy state"
@@ -106,7 +240,11 @@ demo_incident() {
     echo "3. Detection and diagnosis"
     echo "4. Resolution and recovery"
     echo "5. Verification"
+    echo "6. AI-powered RCA analysis (Bedrock)"
     echo ""
+    
+    # Initialize AI incident logging
+    init_logging
     
     read -p "Press Enter to start the demo..."
     
@@ -118,6 +256,10 @@ demo_incident() {
     show_pods
     check_health
     show_resources
+    
+    # Capture initial state for AI analysis
+    capture_app_logs "INITIAL_STATE"
+    capture_metrics_snapshot "INITIAL_STATE"
     
     # Disable HPA for demo
     disable_hpa
@@ -137,6 +279,9 @@ demo_incident() {
     
     print_success "Memory leak simulation activated!"
     print_warning "The application will now gradually consume more memory..."
+    
+    # Log incident trigger
+    log_incident_data "INCIDENT_TRIGGER" "Memory leak simulation enabled" "Memory leak simulation activated via API call"
     
     read -p "Press Enter to continue to detection phase..."
     
@@ -171,6 +316,10 @@ demo_incident() {
     print_status "7. Checking Kubernetes events (should show memory pressure):"
     show_events
     
+    # Capture detection phase data for AI analysis
+    capture_app_logs "DETECTION"
+    capture_metrics_snapshot "DETECTION"
+    
     print_warning "Detection complete! We can see the memory leak affecting our application."
     
     read -p "Press Enter to continue to diagnosis phase..."
@@ -189,6 +338,10 @@ demo_incident() {
         -H "Content-Type: application/json" \
         -d '{"mode": "none"}' || true
     echo ""
+    
+    # Capture diagnosis phase data for AI analysis
+    capture_app_logs "DIAGNOSIS"
+    log_incident_data "DIAGNOSIS" "Root cause identified" "Memory leak simulation enabled in application"
     
     print_success "Diagnosis complete! Root cause: Memory leak simulation enabled."
     
@@ -209,6 +362,9 @@ demo_incident() {
     
     print_status "3. Waiting for deployment to be ready:"
     $KUBECTL_CMD wait --for=condition=ready pod -l app.kubernetes.io/name=sre-demo-app --timeout=300s
+    
+    # Log resolution actions
+    log_incident_data "RESOLUTION" "Memory leak disabled and pods restarted" "Resolution actions completed successfully"
     
     print_success "Resolution complete! Memory leak disabled and pods restarted."
     
@@ -231,10 +387,46 @@ demo_incident() {
     print_status "4. Checking pod status (should be running):"
     show_pods
     
+    # Capture verification phase data for AI analysis
+    capture_app_logs "VERIFICATION"
+    capture_metrics_snapshot "VERIFICATION"
+    
     # Re-enable HPA
     enable_hpa
     
     print_success "Verification complete! Application is healthy and stable."
+    
+    # Upload logs to S3 for AI analysis
+    upload_logs_to_s3
+    
+    # AI Analysis Phase
+    echo ""
+    print_warning "=== Phase 7: AI-Powered RCA Analysis ==="
+    print_status "Now let's analyze the incident using AWS Bedrock..."
+    
+    print_status "Incident logs have been uploaded to S3 for AI analysis."
+    print_status "You can now run the AI analysis script to get detailed RCA:"
+    echo ""
+    print_status "Run: ./scripts/analyze-incident.sh -i $INCIDENT_ID"
+    echo ""
+    print_status "This will use AWS Bedrock to analyze the logs and provide:"
+    echo "  • Root cause analysis"
+    echo "  • Immediate fixes"
+    echo "  • Preventive measures"
+    echo "  • Lessons learned"
+    echo "  • Recommendations"
+    echo ""
+    
+    read -p "Press Enter to run AI analysis now (or Ctrl+C to skip)..."
+    
+    # Run AI analysis
+    if [ -f "./scripts/analyze-incident.sh" ]; then
+        print_status "Running AI analysis..."
+        ./scripts/analyze-incident.sh -i "$INCIDENT_ID" -t "memory_leak" -r 30
+    else
+        print_warning "AI analysis script not found. Please run manually:"
+        print_status "./scripts/analyze-incident.sh -i $INCIDENT_ID"
+    fi
     
     # Summary
     echo ""
@@ -247,8 +439,9 @@ demo_incident() {
     echo "✅ Incident Diagnosis (logs + metrics)"
     echo "✅ Incident Resolution (simulation disable + restart)"
     echo "✅ Verification (health checks + monitoring)"
+    echo "✅ AI-Powered RCA Analysis (AWS Bedrock)"
     echo ""
-    print_status "This demonstrates a complete SRE incident response process!"
+    print_status "This demonstrates a complete SRE incident response process with AI enhancement!"
     echo ""
 }
 

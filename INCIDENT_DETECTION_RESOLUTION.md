@@ -56,7 +56,7 @@ Our application is experiencing a **memory leak** that gradually consumes all av
 
 **Tool**: Grafana Dashboard (`http://localhost:3000`)
 - **Username**: `admin`
-- **Password**: `<GRAFANA_PASSWORD>`
+- **Password**: `admin123`
 
 **Detection Method**:
 1. **Memory Usage Spike**: Grafana shows memory usage trending upward

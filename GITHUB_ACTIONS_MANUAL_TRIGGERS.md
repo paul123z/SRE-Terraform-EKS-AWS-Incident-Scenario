@@ -8,8 +8,8 @@ All GitHub Actions workflows in this repository are configured to trigger **only
 
 ### **1. `deploy.yml`**
 - **Trigger**: `workflow_dispatch` (Manual only)
-- **Purpose**: Complete infrastructure and application deployment
-- **Jobs**: Test → Build & Push → Deploy → Terraform Plan (PR only)
+- **Purpose**: application deployment
+- **Jobs**: Test → Build & Push → Deploy
 
 ### **2. `build-push-deploy-app.yml`**
 - **Trigger**: `workflow_dispatch` (Manual only)
