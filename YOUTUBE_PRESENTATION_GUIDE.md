@@ -185,11 +185,55 @@ helm install prometheus prometheus-community/kube-prometheus-stack \
 ```
 **Explain**: "This installs Prometheus and Grafana for monitoring"
 
-#### **Step 4: Access Grafana**
+#### **Step 4: Install Kubernetes Dashboard (Optional)**
+```bash
+# Install Kubernetes Dashboard
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.7.0/aio/deploy/recommended.yaml
+
+# Create dashboard admin user
+kubectl apply -f - <<EOF
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: dashboard-admin
+  namespace: kubernetes-dashboard
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: dashboard-admin
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+- kind: ServiceAccount
+  name: dashboard-admin
+  namespace: kubernetes-dashboard
+EOF
+```
+**Explain**: "This installs the Kubernetes Dashboard for cluster management"
+
+#### **Step 5: Access Grafana**
 ```bash
 kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80
 ```
-**Show**: "Grafana dashboard with pre-configured SRE dashboards"
+**Show**: "Grafana dashboard at http://localhost:3000"
+- **Credentials**: `admin` / `admin123`
+- **Navigate to**: Dashboards → Browse
+- **Find**: "Kubernetes / Compute Resources / Namespace (Pods)"
+- **Explain**: "This dashboard shows real-time CPU and memory usage for all pods in our namespace"
+
+#### **Step 6: Access Kubernetes Dashboard (Optional)**
+```bash
+# Start dashboard proxy
+kubectl proxy
+
+# Generate access token
+./scripts/get-dashboard-token.sh
+```
+**Show**: "Kubernetes Dashboard at http://localhost:8001/api/v1/namespaces/kubernetes-dashboard/services/https:kubernetes-dashboard:/proxy/"
+**Explain**: "Use the token from the script to log into the dashboard"
 
 ### 🚨 **Incident Simulation Demo (6-8 minutes)**
 
@@ -211,8 +255,8 @@ kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80
 ```
 - **Show**: Grafana dashboard at `http://localhost:3000`
 - **Credentials**: `admin` / `admin123`
-- **Navigate to**: SRE Demo Dashboard
-- **Explain**: "We can see CPU, memory, and application health metrics"
+- **Navigate to**: Dashboards → Browse → "Kubernetes / Compute Resources / Namespace (Pods)"
+- **Explain**: "This dashboard shows real-time CPU and memory usage for all pods in our namespace"
 
 #### **Step 3: Simulate Memory Leak Incident**
 ```bash
@@ -224,10 +268,11 @@ curl -X POST http://$SERVICE_URL/api/memory-leak \
 **Explain**: "This triggers a memory leak in our application"
 
 #### **Step 4: Show Real-Time Memory Increase**
-- **Switch to Grafana**: Show memory usage graph
+- **Switch to Grafana**: Navigate to "Kubernetes / Compute Resources / Namespace (Pods)"
+- **Focus on**: Memory usage graph for sre-demo-app pods
 - **Explain**: "Watch how memory consumption increases over time"
-- **Show**: Memory metrics climbing steadily
-- **Point out**: "This is exactly what a real memory leak looks like"
+- **Show**: Memory metrics climbing steadily in the graph
+- **Point out**: "This is exactly what a real memory leak looks like - memory usage keeps growing"
 
 #### **Step 5: Demonstrate Incident Response**
 ```bash
@@ -242,6 +287,12 @@ kubectl logs -l app.kubernetes.io/name=sre-demo-app
 ```
 **Explain**: "This is how an SRE would investigate the incident"
 
+**Optional: Show Kubernetes Dashboard**
+- **Switch to browser**: Show Kubernetes Dashboard
+- **Navigate to**: Pods → sre-demo-app
+- **Show**: Resource usage, logs, and pod status
+- **Explain**: "The dashboard provides a visual way to monitor the cluster"
+
 #### **Step 6: Resolve the Incident**
 ```bash
 # Disable memory leak
@@ -252,9 +303,11 @@ curl -X POST http://$SERVICE_URL/api/memory-leak \
 **Show**: "Memory usage stabilizes and returns to normal"
 
 #### **Step 7: Show Recovery in Grafana**
-- **Switch back to Grafana**: Show memory graph stabilizing
-- **Explain**: "The system recovers and metrics return to baseline"
-- **Point out**: "This demonstrates real-time monitoring and incident response"
+- **Switch back to Grafana**: Return to "Kubernetes / Compute Resources / Namespace (Pods)"
+- **Focus on**: Memory usage graph for sre-demo-app pods
+- **Show**: Memory graph stabilizing and returning to baseline
+- **Explain**: "The system recovers and memory usage returns to normal levels"
+- **Point out**: "This demonstrates real-time monitoring and incident response capabilities"
 
 ### 🧹 **Cleanup & Cost Management (2-3 minutes)**
 
@@ -334,12 +387,12 @@ curl -X POST http://$SERVICE_URL/api/memory-leak \
 | Infrastructure | 5-7 min | Terraform deployment |
 | Build & Push | 3-4 min | Docker and ECR |
 | Deployment | 3-4 min | Helm and Kubernetes |
-| Monitoring | 4-5 min | Prometheus and Grafana |
+| Monitoring | 5-6 min | Prometheus, Grafana, and K8s Dashboard |
 | Demo | 6-8 min | Incident simulation |
 | Cleanup | 2-3 min | Cost management |
 | Wrap-up | 2-3 min | Takeaways and next steps |
 
-**Total Estimated Time**: 35-45 minutes
+**Total Estimated Time**: 36-46 minutes
 
 ## 🚀 **Ready to Record!**
 
