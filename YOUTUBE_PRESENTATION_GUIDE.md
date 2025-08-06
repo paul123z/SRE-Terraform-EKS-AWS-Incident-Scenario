@@ -52,6 +52,10 @@ This manual step-by-step approach will achieve the **exact same result** as runn
 ```bash
 git clone <your-repo-url>
 cd SRE-Terraform-EKS-AWS-Incident-Scenario
+
+# Set up environment variables for the session
+export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+echo "AWS Account ID: $AWS_ACCOUNT_ID"
 ```
 
 #### **Step 2: Terraform Initialization**
@@ -100,21 +104,29 @@ docker build -t sre-demo-app .
 ```
 **Explain**: "This creates a container image from our Node.js application"
 
-#### **Step 2: Tag for ECR**
+#### **Step 2: Get Your AWS Account ID**
 ```bash
-docker tag sre-demo-app:latest <your-account>.dkr.ecr.eu-central-1.amazonaws.com/sre-demo-app:latest
+# Get your AWS account ID dynamically
+AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+echo "Your AWS Account ID: $AWS_ACCOUNT_ID"
 ```
-**Explain**: "We tag the image for our ECR repository"
+**Explain**: "This gets your AWS account ID automatically - no need to hardcode it"
 
-#### **Step 3: Login to ECR**
+#### **Step 3: Tag for ECR**
 ```bash
-aws ecr get-login-password --region eu-central-1 | docker login --username AWS --password-stdin <your-account>.dkr.ecr.eu-central-1.amazonaws.com
+docker tag sre-demo-app:latest $AWS_ACCOUNT_ID.dkr.ecr.eu-central-1.amazonaws.com/sre-demo-app:latest
+```
+**Explain**: "We tag the image using our dynamic AWS account ID"
+
+#### **Step 4: Login to ECR**
+```bash
+aws ecr get-login-password --region eu-central-1 | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.eu-central-1.amazonaws.com
 ```
 **Explain**: "This authenticates Docker with our ECR repository"
 
-#### **Step 4: Push to ECR**
+#### **Step 5: Push to ECR**
 ```bash
-docker push <your-account>.dkr.ecr.eu-central-1.amazonaws.com/sre-demo-app:latest
+docker push $AWS_ACCOUNT_ID.dkr.ecr.eu-central-1.amazonaws.com/sre-demo-app:latest
 ```
 **Explain**: "This uploads our image to AWS ECR"
 
@@ -123,9 +135,9 @@ docker push <your-account>.dkr.ecr.eu-central-1.amazonaws.com/sre-demo-app:lates
 #### **Step 1: Deploy with Helm**
 ```bash
 cd ../helm/sre-demo-app
-helm install sre-demo-app . --set image.repository=<your-account>.dkr.ecr.eu-central-1.amazonaws.com/sre-demo-app
+helm install sre-demo-app . --set image.repository=$AWS_ACCOUNT_ID.dkr.ecr.eu-central-1.amazonaws.com/sre-demo-app
 ```
-**Explain**: "This deploys our application to Kubernetes using Helm"
+**Explain**: "This deploys our application to Kubernetes using Helm with our dynamic account ID"
 
 #### **Step 2: Verify Deployment**
 ```bash
@@ -182,8 +194,13 @@ kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80
 ### 🚨 **Incident Simulation Demo (6-8 minutes)**
 
 #### **Step 1: Show Normal Operation**
-- Visit the application URL: `http://<load-balancer-url>`
-- Show health check endpoint: `curl http://<app-url>/health`
+```bash
+# Get the load balancer URL
+SERVICE_URL=$(kubectl get svc sre-demo-app -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+echo "Application URL: http://$SERVICE_URL"
+```
+- Visit the application URL: `http://$SERVICE_URL`
+- Show health check endpoint: `curl http://$SERVICE_URL/health`
 - Show normal metrics in Grafana dashboard
 - **Explain**: "This is our baseline - everything is healthy"
 
@@ -200,7 +217,7 @@ kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80
 #### **Step 3: Simulate Memory Leak Incident**
 ```bash
 # Enable memory leak simulation
-curl -X POST http://<app-url>/api/memory-leak \
+curl -X POST http://$SERVICE_URL/api/memory-leak \
   -H "Content-Type: application/json" \
   -d '{"enable": true}'
 ```
@@ -228,7 +245,7 @@ kubectl logs -l app.kubernetes.io/name=sre-demo-app
 #### **Step 6: Resolve the Incident**
 ```bash
 # Disable memory leak
-curl -X POST http://<app-url>/api/memory-leak \
+curl -X POST http://$SERVICE_URL/api/memory-leak \
   -H "Content-Type: application/json" \
   -d '{"enable": false}'
 ```
