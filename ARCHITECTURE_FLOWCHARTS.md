@@ -157,9 +157,10 @@ graph TB
     DOCKER -->|Push| ECR
     GH_ACTIONS -->|Deploy| KUBECTL
     KUBECTL -->|Apply| DEPLOYMENT
+    DEPLOYMENT -->|Pull Image| ECR
     
     %% Application Flow
-    ECR -->|Pull Image| PODS
+    PODS -->|Pull Image| ECR
     PODS -->|Expose| SERVICE
     SERVICE -->|Route| ALB
     ALB -->|Traffic| TARGET_GROUP
@@ -204,8 +205,9 @@ graph TB
     class GH,GH_ACTIONS,GH_SECRETS github
     class VPC,PUB_SUBNET,PRIV_SUBNET,NAT,IGW,EKS,NODES,ECR,S3,LAMBDA,BEDROCK,CLOUDWATCH,ALB,TARGET_GROUP aws
     class PODS,DEPLOYMENT,SERVICE,HPA,INGRESS k8s
+    class LOCAL,DOCKER,TF,KUBECTL github
     class PROMETHEUS,GRAFANA,ALERTMANAGER monitoring
-    class LOGS,AI_ANALYSIS,RCA_REPORT ai
+    class LOGS,BEDROCK_ANALYSIS,LOCAL_FILES,RCA_REPORT ai
 ```
 
 ---
@@ -388,7 +390,9 @@ graph TD
     
     %% Kubernetes Deploy
     HELM_CHART --> DEPLOYMENT
+    DEPLOYMENT -->|Pull Image| ECR_REPO
     DEPLOYMENT --> PODS
+    PODS -->|Pull Image| ECR_REPO
     PODS --> SERVICE
     SERVICE --> LOAD_BALANCER
     DEPLOYMENT --> HPA
@@ -746,7 +750,7 @@ graph LR
 
 ### **Data Flow:**
 
-1. **Code → Build → Deploy**: GitHub → Docker → ECR → Kubernetes
+1. **Code → Build → Deploy**: GitHub → Docker Build → ECR Push → Kubernetes Pull → Application
 2. **Infrastructure**: Terraform → AWS → EKS → Monitoring
 3. **Monitoring**: Application → Prometheus → Grafana → Alerts
 4. **Incident Response**: Incident → Logs → Bedrock → Local Files → RCA
