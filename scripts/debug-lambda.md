@@ -1,3 +1,3 @@
 # debug-lambda.sh
 
-Debugging tool that shows detailed Lambda function errors and logs. Helps identify why the Lambda function is failing and shows the exact error messages from CloudWatch logs. 
+Debugging utility for the incident-analyzer Lambda function. Tests Lambda invocation, checks logs, and helps troubleshoot issues with the AI analysis Lambda. Useful for diagnosing problems with the Lambda-based analysis approach. 

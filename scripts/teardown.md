@@ -1,0 +1,3 @@
+# teardown.sh
+
+Comprehensive infrastructure cleanup script that safely removes all AWS resources including EKS cluster, VPC, IAM roles, ECR repository, and S3 bucket. Now includes proper S3 bucket cleanup by removing all object versions and delete markers before attempting bucket deletion, preventing the "BucketNotEmpty" error. Cleans up local Terraform state files and provides a summary of all removed resources. 

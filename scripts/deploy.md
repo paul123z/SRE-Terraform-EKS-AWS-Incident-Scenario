@@ -1,3 +1,3 @@
 # deploy.sh
 
-Main deployment script that sets up the entire infrastructure. Creates EKS cluster, deploys application with Helm, sets up monitoring (Prometheus/Grafana), and installs Kubernetes Dashboard. This is the one-stop script for the complete demo setup. 
+Main deployment script that sets up the complete SRE incident demo infrastructure using Terraform. Creates EKS cluster, VPC, IAM roles, ECR repository, S3 bucket, and deploys the demo application with monitoring stack (Prometheus/Grafana). Includes validation steps to ensure all components are working correctly before completing deployment. 

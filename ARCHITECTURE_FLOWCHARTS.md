@@ -62,6 +62,7 @@ done
   - [🔄 CI/CD Pipeline Flow](#-cicd-pipeline-flow)
   - [🚀 Application Deployment Flow](#-application-deployment-flow)
   - [📊 Monitoring \& Observability Flow](#-monitoring--observability-flow)
+  - [🔐 AWS Bedrock Provisioning Flow](#-aws-bedrock-provisioning-flow)
   - [🚨 Incident Response \& AI Analysis Flow](#-incident-response--ai-analysis-flow)
   - [🔄 Data Flow Architecture](#-data-flow-architecture)
   - [📋 Architecture Summary](#-architecture-summary)
@@ -134,7 +135,8 @@ graph TB
     
     subgraph "AI Incident Response"
         LOGS[Incident Logs]
-        AI_ANALYSIS[AI Analysis]
+        BEDROCK_ANALYSIS[Bedrock Analysis]
+        LOCAL_FILES[Local Analysis Files]
         RCA_REPORT[RCA Report]
     end
     
@@ -170,11 +172,9 @@ graph TB
     
     %% Incident Response Flow
     PODS -->|Logs| LOGS
-    LOGS -->|Upload| S3
-    S3 -->|Retrieve| LAMBDA
-    LAMBDA -->|Analyze| BEDROCK
-    BEDROCK -->|Results| AI_ANALYSIS
-    AI_ANALYSIS -->|Generate| RCA_REPORT
+    LOGS -->|Analyze| BEDROCK_ANALYSIS
+    BEDROCK_ANALYSIS -->|Store| LOCAL_FILES
+    LOCAL_FILES -->|Generate| RCA_REPORT
     
     %% Networking
     VPC -->|Contains| PUB_SUBNET
@@ -495,6 +495,57 @@ graph TB
 
 ---
 
+## 🔐 AWS Bedrock Provisioning Flow
+
+```mermaid
+graph TD
+    subgraph "Prerequisites"
+        AWS_ACCOUNT[AWS Account]
+        BEDROCK_ACCESS[Bedrock Access Enabled]
+        REGION[Target Region]
+    end
+    
+    subgraph "Model Provisioning"
+        BEDROCK_CONSOLE[Bedrock Console]
+        ANTHROPIC[Anthropic Provider]
+        CLAUDE_MODEL[Claude Sonnet 4]
+        EULA[Accept EULA]
+        PROVISION[Request Access]
+    end
+    
+    subgraph "Verification"
+        ACCESS_STATUS[Access Status]
+        GREEN_CHECK[✅ Access Granted]
+        TEST_CALL[Test API Call]
+    end
+    
+    %% Prerequisites
+    AWS_ACCOUNT --> BEDROCK_ACCESS
+    BEDROCK_ACCESS --> REGION
+    
+    %% Provisioning
+    REGION --> BEDROCK_CONSOLE
+    BEDROCK_CONSOLE --> ANTHROPIC
+    ANTHROPIC --> CLAUDE_MODEL
+    CLAUDE_MODEL --> EULA
+    EULA --> PROVISION
+    
+    %% Verification
+    PROVISION --> ACCESS_STATUS
+    ACCESS_STATUS --> GREEN_CHECK
+    GREEN_CHECK --> TEST_CALL
+    
+    classDef prereq fill:#6366F1,stroke:#6366F1,stroke-width:2px,color:#fff
+    classDef provisioning fill:#FF9900,stroke:#232F3E,stroke-width:2px,color:#000
+    classDef verification fill:#00D4AA,stroke:#00D4AA,stroke-width:2px,color:#000
+    
+    class AWS_ACCOUNT,BEDROCK_ACCESS,REGION prereq
+    class BEDROCK_CONSOLE,ANTHROPIC,CLAUDE_MODEL,EULA,PROVISION provisioning
+    class ACCESS_STATUS,GREEN_CHECK,TEST_CALL verification
+```
+
+---
+
 ## 🚨 Incident Response & AI Analysis Flow
 
 ```mermaid
@@ -526,10 +577,10 @@ graph TD
     end
     
     subgraph "AI Analysis"
-        LAMBDA[Lambda Function]
         BEDROCK[AWS Bedrock]
-        CLAUDE[Claude 3 Sonnet]
+        CLAUDE[Claude Sonnet 4]
         AI_ANALYSIS[AI Analysis]
+        LOCAL_ANALYSIS[Local Analysis Files]
     end
     
     subgraph "RCA Report"
@@ -570,10 +621,10 @@ graph TD
     INCIDENT_FOLDER --> LOG_UPLOAD
     
     %% AI Analysis
-    LOG_UPLOAD --> LAMBDA
-    LAMBDA --> BEDROCK
+    LOG_FILES --> BEDROCK
     BEDROCK --> CLAUDE
     CLAUDE --> AI_ANALYSIS
+    AI_ANALYSIS --> LOCAL_ANALYSIS
     
     %% Report Generation
     AI_ANALYSIS --> INCIDENT_SUMMARY
@@ -592,7 +643,7 @@ graph TD
     class INCIDENT_DEMO,MEMORY_LEAK,CPU_STRESS,HEALTH_FAILURE incident
     class APP_LOGS,K8S_LOGS,METRICS,EVENTS,LOG_DIR,INCIDENT_ID,LOG_FILES data
     class S3_BUCKET,INCIDENT_FOLDER,LOG_UPLOAD storage
-    class LAMBDA,BEDROCK,CLAUDE,AI_ANALYSIS ai
+    class BEDROCK,CLAUDE,AI_ANALYSIS,LOCAL_ANALYSIS ai
     class INCIDENT_SUMMARY,ROOT_CAUSE,IMMEDIATE_FIXES,PREVENTIVE_MEASURES,LESSONS_LEARNED,RECOMMENDATIONS report
 ```
 
@@ -629,9 +680,8 @@ graph LR
     
     subgraph "AI Layer"
         LOGS[Logs]
-        S3[S3 Storage]
-        LAMBDA[Lambda]
         BEDROCK[Bedrock]
+        LOCAL_FILES[Local Analysis Files]
         RCA[RCA Report]
     end
     
@@ -659,10 +709,9 @@ graph LR
     
     %% AI Analysis Flow
     APP -->|Logs| LOGS
-    LOGS -->|Store| S3
-    S3 -->|Retrieve| LAMBDA
-    LAMBDA -->|Analyze| BEDROCK
-    BEDROCK -->|Generate| RCA
+    LOGS -->|Analyze| BEDROCK
+    BEDROCK -->|Store| LOCAL_FILES
+    LOCAL_FILES -->|Generate| RCA
     
     %% Feedback Loops
     ALERTS -->|Notify| USER
@@ -679,7 +728,7 @@ graph LR
     class TERRAFORM,AWS,EKS infra
     class DOCKER,ECR,K8S,APP app
     class PROMETHEUS,GRAFANA,ALERTS monitoring
-    class LOGS,S3,LAMBDA,BEDROCK,RCA ai
+    class LOGS,BEDROCK,LOCAL_FILES,RCA ai
 ```
 
 ---
@@ -693,14 +742,14 @@ graph LR
 3. **AWS Infrastructure**: VPC, EKS, ECR, S3, Lambda, Bedrock
 4. **Kubernetes Resources**: Deployments, Services, HPA, Ingress
 5. **Monitoring Stack**: Prometheus, Grafana, Alert Manager
-6. **AI Incident Response**: Log capture, S3 storage, Lambda analysis, Bedrock RCA
+6. **AI Incident Response**: Log capture, direct Bedrock analysis, local file storage, RCA generation
 
 ### **Data Flow:**
 
 1. **Code → Build → Deploy**: GitHub → Docker → ECR → Kubernetes
 2. **Infrastructure**: Terraform → AWS → EKS → Monitoring
 3. **Monitoring**: Application → Prometheus → Grafana → Alerts
-4. **Incident Response**: Incident → Logs → S3 → Lambda → Bedrock → RCA
+4. **Incident Response**: Incident → Logs → Bedrock → Local Files → RCA
 
 ### **Key Benefits:**
 

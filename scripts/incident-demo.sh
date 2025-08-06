@@ -402,30 +402,95 @@ demo_incident() {
     # AI Analysis Phase
     echo ""
     print_warning "=== Phase 7: AI-Powered RCA Analysis ==="
-    print_status "Now let's analyze the incident using AWS Bedrock..."
+    print_status "Now let's analyze the incident using AWS Bedrock (Claude Sonnet 4)..."
     
-    print_status "Incident logs have been uploaded to S3 for AI analysis."
+    print_status "Incident logs have been captured locally for AI analysis."
     print_status "You can now run the AI analysis script to get detailed RCA:"
     echo ""
-    print_status "Run: ./scripts/analyze-incident-simple.sh $INCIDENT_ID"
+    print_status "Run: ./scripts/analyze-incident-bedrock.sh $INCIDENT_ID"
     echo ""
-    print_status "This will use AI-powered analysis to examine the logs and provide:"
+    print_status "This will use AWS Bedrock (Claude Sonnet 4) to analyze the logs and provide:"
     echo "  • Root cause analysis"
     echo "  • Immediate fixes"
     echo "  • Preventive measures"
     echo "  • Lessons learned"
     echo "  • Recommendations"
     echo ""
+    print_status "Analysis results will be saved in: $(pwd)/bedrock-analysis"
+    echo ""
     
     read -p "Press Enter to run AI analysis now (or Ctrl+C to skip)..."
     
     # Run AI analysis
-    if [ -f "./scripts/analyze-incident-simple.sh" ]; then
-        print_status "Running AI analysis..."
-        ./scripts/analyze-incident-simple.sh "$INCIDENT_ID"
+    if [ -f "./scripts/analyze-incident-bedrock.sh" ] && [ -x "./scripts/analyze-incident-bedrock.sh" ]; then
+        print_status "Running AI analysis with AWS Bedrock..."
+        
+        # Capture the output of the analysis
+        ANALYSIS_OUTPUT=$(./scripts/analyze-incident-bedrock.sh "$INCIDENT_ID" 2>&1)
+        ANALYSIS_EXIT_CODE=$?
+        
+        if [ $ANALYSIS_EXIT_CODE -eq 0 ]; then
+            print_success "AI analysis completed successfully!"
+            
+            # Display the analysis results
+            echo ""
+            print_header "🤖 AI-POWERED INCIDENT ANALYSIS RESULTS"
+            echo ""
+            
+            # Extract and display the structured analysis if available
+            ANALYSIS_FILE="bedrock-analysis/incident-analysis-$INCIDENT_ID.json"
+            if [ -f "$ANALYSIS_FILE" ]; then
+                if command -v jq &> /dev/null; then
+                print_status "📊 INCIDENT SUMMARY:"
+                INCIDENT_TYPE=$(jq -r '.analysis.incident_summary.type' "$ANALYSIS_FILE" 2>/dev/null || echo "Unknown")
+                SEVERITY=$(jq -r '.analysis.incident_summary.severity' "$ANALYSIS_FILE" 2>/dev/null || echo "Unknown")
+                DURATION=$(jq -r '.analysis.incident_summary.duration' "$ANALYSIS_FILE" 2>/dev/null || echo "Unknown")
+                echo "  Type: $INCIDENT_TYPE"
+                echo "  Severity: $SEVERITY"
+                echo "  Duration: $DURATION"
+                echo ""
+                
+                print_status "🔍 ROOT CAUSE ANALYSIS:"
+                PRIMARY_CAUSE=$(jq -r '.analysis.root_cause_analysis.primary_cause' "$ANALYSIS_FILE" 2>/dev/null || echo "Unknown")
+                echo "  Primary Cause: $PRIMARY_CAUSE"
+                echo ""
+                
+                print_status "⚡ IMMEDIATE FIXES:"
+                jq -r '.analysis.immediate_fixes[] | "  \(.priority | ascii_upcase): \(.action) - \(.description)"' "$ANALYSIS_FILE" 2>/dev/null || echo "  No immediate fixes found"
+                echo ""
+                
+                print_status "🛡️ PREVENTIVE MEASURES:"
+                jq -r '.analysis.preventive_measures[] | "  \(.measure): \(.implementation) (Timeline: \(.timeline))"' "$ANALYSIS_FILE" 2>/dev/null || echo "  No preventive measures found"
+                echo ""
+                
+                print_status "📚 LESSONS LEARNED:"
+                jq -r '.analysis.lessons_learned[] | "  • \(.)"' "$ANALYSIS_FILE" 2>/dev/null || echo "  No lessons learned found"
+                echo ""
+                
+                print_status "💡 RECOMMENDATIONS:"
+                jq -r '.analysis.recommendations[] | "  \(.category | ascii_upcase): \(.recommendation) (Impact: \(.impact))"' "$ANALYSIS_FILE" 2>/dev/null || echo "  No recommendations found"
+                echo ""
+                
+                    print_success "✅ AI analysis results displayed above!"
+                    print_status "Full analysis saved to: $ANALYSIS_FILE"
+                else
+                    # jq not available, show raw JSON
+                    print_warning "jq not available, showing raw analysis file:"
+                    cat "$ANALYSIS_FILE"
+                fi
+            else
+                # Fallback: show the raw output
+                print_warning "Structured analysis file not found, showing raw output:"
+                echo "$ANALYSIS_OUTPUT"
+            fi
+        else
+            print_error "AI analysis failed with exit code $ANALYSIS_EXIT_CODE"
+            print_warning "Raw output:"
+            echo "$ANALYSIS_OUTPUT"
+        fi
     else
         print_warning "AI analysis script not found. Please run manually:"
-        print_status "./scripts/analyze-incident-simple.sh $INCIDENT_ID"
+        print_status "./scripts/analyze-incident-bedrock.sh $INCIDENT_ID"
     fi
     
     # Summary
@@ -439,7 +504,7 @@ demo_incident() {
     echo "✅ Incident Diagnosis (logs + metrics)"
     echo "✅ Incident Resolution (simulation disable + restart)"
     echo "✅ Verification (health checks + monitoring)"
-    echo "✅ AI-Powered RCA Analysis (AWS Bedrock)"
+    echo "✅ AI-Powered RCA Analysis (AWS Bedrock + Claude Sonnet 4)"
     echo ""
     print_status "This demonstrates a complete SRE incident response process with AI enhancement!"
     echo ""
@@ -447,18 +512,21 @@ demo_incident() {
     # AI Explanation
     print_header "🤖 HOW AI ENHANCES INCIDENT RESPONSE"
     echo ""
-    print_status "Our AI system works in two ways:"
-    echo "  1. 📊 Analyzes logs and metrics to identify patterns"
-    echo "  2. 🧠 Provides intelligent recommendations for fixes"
+    print_status "Our AI system uses AWS Bedrock (Claude Sonnet 4) to:"
+    echo "  1. 📊 Analyze incident logs and metrics to identify patterns"
+    echo "  2. 🧠 Provide intelligent recommendations for fixes"
+    echo "  3. 🔍 Perform root cause analysis automatically"
     echo ""
     print_status "What the AI does:"
-    echo "  • Reads through all the logs we collected"
+    echo "  • Reads through all the logs we collected during the incident"
     echo "  • Identifies the root cause of the problem"
     echo "  • Suggests immediate fixes to resolve the issue"
     echo "  • Recommends ways to prevent it from happening again"
     echo "  • Provides lessons learned for future incidents"
+    echo "  • Works even after infrastructure is torn down (log-based analysis)"
     echo ""
     print_status "This saves hours of manual analysis and helps SREs respond faster!"
+    print_status "The analysis works offline using only the incident log files."
     echo ""
 }
 
@@ -479,11 +547,17 @@ check_prerequisites() {
     fi
     
     # Check if application is deployed
-if ! $KUBECTL_CMD get deployment sre-demo-app &> /dev/null; then
-    print_error "sre-demo-app deployment not found"
-    print_status "Please deploy the application first: ./scripts/deploy.sh"
-    exit 1
-fi
+    if ! $KUBECTL_CMD get deployment sre-demo-app &> /dev/null; then
+        print_error "sre-demo-app deployment not found"
+        print_status "Please deploy the application first: ./scripts/deploy.sh"
+        exit 1
+    fi
+    
+    # Check if Bedrock analysis script is available and executable
+    if [ ! -f "./scripts/analyze-incident-bedrock.sh" ] || [ ! -x "./scripts/analyze-incident-bedrock.sh" ]; then
+        print_warning "Bedrock analysis script not found or not executable"
+        print_status "AI analysis phase will be skipped"
+    fi
 
 # Check if we have enough nodes for the demo
 NODE_COUNT=$($KUBECTL_CMD get nodes --no-headers | wc -l)

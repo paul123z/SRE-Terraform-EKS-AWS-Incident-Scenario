@@ -1,3 +1,3 @@
-# enable-bedrock-model.md
+# enable-bedrock-model.sh
 
-Guides you through enabling Bedrock model access in AWS console. Tests the API key setup and provides step-by-step instructions for requesting model access. Use this when setting up Bedrock for the first time. 
+Script to enable and provision AWS Bedrock models, specifically Claude Sonnet 4. Checks model availability, requests access if needed, and verifies provisioning status. This is a critical step that must be completed before the Bedrock analysis can work - models must be provisioned and access granted. 

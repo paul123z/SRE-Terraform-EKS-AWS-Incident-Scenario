@@ -1,3 +1,3 @@
 # fix-bedrock-permissions.sh
 
-Adds the missing Bedrock permissions to the Lambda role so it can access AWS Bedrock in us-west-1. This script fixes the "AccessDeniedException" error by adding the required IAM policy. 
+Utility script to troubleshoot and fix AWS Bedrock permissions issues. Checks IAM roles and policies for proper Bedrock access, verifies model provisioning status, and provides guidance for resolving common access problems. Essential for ensuring the Bedrock integration works correctly. 

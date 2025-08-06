@@ -1,3 +1,3 @@
 # incident-demo.sh
 
-Runs a complete SRE incident simulation demo. Simulates a memory leak, shows detection/diagnosis/resolution steps, and triggers AI-powered analysis using AWS Bedrock. This is the main demo script for the YouTube presentation. 
+Complete SRE incident demonstration script that walks through a full incident lifecycle including simulation, detection, diagnosis, resolution, and verification. Now includes integrated AI analysis using AWS Bedrock as the final phase. Captures comprehensive logs and metrics throughout the incident for AI analysis, and automatically runs Bedrock analysis at the end to provide intelligent root cause analysis and recommendations. 

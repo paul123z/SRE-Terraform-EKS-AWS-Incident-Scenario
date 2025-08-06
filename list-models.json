@@ -1,0 +1,225 @@
+{
+    "modelSummaries": [
+        {
+            "modelArn": "arn:aws:bedrock:us-west-1::foundation-model/amazon.nova-lite-v1:0",
+            "modelId": "amazon.nova-lite-v1:0",
+            "modelName": "Nova Lite",
+            "providerName": "Amazon",
+            "inputModalities": [
+                "TEXT",
+                "IMAGE",
+                "VIDEO"
+            ],
+            "outputModalities": [
+                "TEXT"
+            ],
+            "responseStreamingSupported": true,
+            "customizationsSupported": [],
+            "inferenceTypesSupported": [
+                "INFERENCE_PROFILE"
+            ],
+            "modelLifecycle": {
+                "status": "ACTIVE"
+            }
+        },
+        {
+            "modelArn": "arn:aws:bedrock:us-west-1::foundation-model/amazon.nova-pro-v1:0",
+            "modelId": "amazon.nova-pro-v1:0",
+            "modelName": "Nova Pro",
+            "providerName": "Amazon",
+            "inputModalities": [
+                "TEXT",
+                "IMAGE",
+                "VIDEO"
+            ],
+            "outputModalities": [
+                "TEXT"
+            ],
+            "responseStreamingSupported": true,
+            "customizationsSupported": [],
+            "inferenceTypesSupported": [
+                "INFERENCE_PROFILE"
+            ],
+            "modelLifecycle": {
+                "status": "ACTIVE"
+            }
+        },
+        {
+            "modelArn": "arn:aws:bedrock:us-west-1::foundation-model/anthropic.claude-sonnet-4-20250514-v1:0:32k",
+            "modelId": "anthropic.claude-sonnet-4-20250514-v1:0:32k",
+            "modelName": "Claude Sonnet 4",
+            "providerName": "Anthropic",
+            "inputModalities": [
+                "TEXT",
+                "IMAGE"
+            ],
+            "outputModalities": [
+                "TEXT"
+            ],
+            "responseStreamingSupported": true,
+            "customizationsSupported": [],
+            "inferenceTypesSupported": [],
+            "modelLifecycle": {
+                "status": "ACTIVE"
+            }
+        },
+        {
+            "modelArn": "arn:aws:bedrock:us-west-1::foundation-model/anthropic.claude-sonnet-4-20250514-v1:0:200k",
+            "modelId": "anthropic.claude-sonnet-4-20250514-v1:0:200k",
+            "modelName": "Claude Sonnet 4",
+            "providerName": "Anthropic",
+            "inputModalities": [
+                "TEXT",
+                "IMAGE"
+            ],
+            "outputModalities": [
+                "TEXT"
+            ],
+            "responseStreamingSupported": true,
+            "customizationsSupported": [],
+            "inferenceTypesSupported": [],
+            "modelLifecycle": {
+                "status": "ACTIVE"
+            }
+        },
+        {
+            "modelArn": "arn:aws:bedrock:us-west-1::foundation-model/anthropic.claude-sonnet-4-20250514-v1:0",
+            "modelId": "anthropic.claude-sonnet-4-20250514-v1:0",
+            "modelName": "Claude Sonnet 4",
+            "providerName": "Anthropic",
+            "inputModalities": [
+                "TEXT",
+                "IMAGE"
+            ],
+            "outputModalities": [
+                "TEXT"
+            ],
+            "responseStreamingSupported": true,
+            "customizationsSupported": [],
+            "inferenceTypesSupported": [
+                "INFERENCE_PROFILE"
+            ],
+            "modelLifecycle": {
+                "status": "ACTIVE"
+            }
+        },
+        {
+            "modelArn": "arn:aws:bedrock:us-west-1::foundation-model/meta.llama4-scout-17b-instruct-v1:0:128k",
+            "modelId": "meta.llama4-scout-17b-instruct-v1:0:128k",
+            "modelName": "Llama 4 Scout 17B Instruct",
+            "providerName": "Meta",
+            "inputModalities": [
+                "TEXT",
+                "IMAGE"
+            ],
+            "outputModalities": [
+                "TEXT"
+            ],
+            "responseStreamingSupported": true,
+            "customizationsSupported": [],
+            "inferenceTypesSupported": [],
+            "modelLifecycle": {
+                "status": "ACTIVE"
+            }
+        },
+        {
+            "modelArn": "arn:aws:bedrock:us-west-1::foundation-model/meta.llama4-scout-17b-instruct-v1:0:10m",
+            "modelId": "meta.llama4-scout-17b-instruct-v1:0:10m",
+            "modelName": "Llama 4 Scout 17B Instruct",
+            "providerName": "Meta",
+            "inputModalities": [
+                "TEXT",
+                "IMAGE"
+            ],
+            "outputModalities": [
+                "TEXT"
+            ],
+            "responseStreamingSupported": true,
+            "customizationsSupported": [],
+            "inferenceTypesSupported": [],
+            "modelLifecycle": {
+                "status": "ACTIVE"
+            }
+        },
+        {
+            "modelArn": "arn:aws:bedrock:us-west-1::foundation-model/meta.llama4-scout-17b-instruct-v1:0",
+            "modelId": "meta.llama4-scout-17b-instruct-v1:0",
+            "modelName": "Llama 4 Scout 17B Instruct",
+            "providerName": "Meta",
+            "inputModalities": [
+                "TEXT",
+                "IMAGE"
+            ],
+            "outputModalities": [
+                "TEXT"
+            ],
+            "responseStreamingSupported": true,
+            "customizationsSupported": [],
+            "inferenceTypesSupported": [
+                "INFERENCE_PROFILE"
+            ],
+            "modelLifecycle": {
+                "status": "ACTIVE"
+            }
+        },
+        {
+            "modelArn": "arn:aws:bedrock:us-west-1::foundation-model/meta.llama4-maverick-17b-instruct-v1:0:128k",
+            "modelId": "meta.llama4-maverick-17b-instruct-v1:0:128k",
+            "modelName": "Llama 4 Maverick 17B Instruct",
+            "providerName": "Meta",
+            "inputModalities": [
+                "TEXT",
+                "IMAGE"
+            ],
+            "outputModalities": [
+                "TEXT"
+            ],
+            "responseStreamingSupported": true,
+            "customizationsSupported": [],
+            "inferenceTypesSupported": [],
+            "modelLifecycle": {
+                "status": "ACTIVE"
+            }
+        },
+        {
+            "modelArn": "arn:aws:bedrock:us-west-1::foundation-model/meta.llama4-maverick-17b-instruct-v1:0:1m",
+            "modelId": "meta.llama4-maverick-17b-instruct-v1:0:1m",
+            "modelName": "Llama 4 Maverick 17B Instruct",
+            "providerName": "Meta",
+            "inputModalities": [
+                "TEXT",
+                "IMAGE"
+            ],
+            "outputModalities": [
+                "TEXT"
+            ],
+            "responseStreamingSupported": true,
+            "customizationsSupported": [],
+            "inferenceTypesSupported": [],
+            "modelLifecycle": {
+                "status": "ACTIVE"
+            }
+        },
+        {
+            "modelArn": "arn:aws:bedrock:us-west-1::foundation-model/meta.llama4-maverick-17b-instruct-v1:0",
+            "modelId": "meta.llama4-maverick-17b-instruct-v1:0",
+            "modelName": "Llama 4 Maverick 17B Instruct",
+            "providerName": "Meta",
+            "inputModalities": [
+                "TEXT",
+                "IMAGE"
+            ],
+            "outputModalities": [
+                "TEXT"
+            ],
+            "responseStreamingSupported": true,
+            "customizationsSupported": [],
+            "inferenceTypesSupported": [
+                "INFERENCE_PROFILE"
+            ],
+            "modelLifecycle": {
+                "status": "ACTIVE"
+            }
+        }
+    ]
+}

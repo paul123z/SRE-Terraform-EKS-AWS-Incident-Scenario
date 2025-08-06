@@ -1,3 +1,3 @@
 # analyze-incident-simple.sh
 
-Tests the AI incident analysis by invoking the Lambda function. Displays the analysis results in a readable format and shows whether Bedrock AI or fallback analysis was used. Use this to verify that AI analysis is working. 
+Legacy incident analysis script that uses AWS Lambda for AI analysis. Invokes the incident-analyzer Lambda function with incident data and displays structured results. This was the original AI analysis method before Bedrock integration. Still functional but replaced by the more direct Bedrock analysis approach. 

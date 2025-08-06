@@ -1,0 +1,3 @@
+# analyze-incident-bedrock.sh
+
+Main script for AI-powered incident analysis using AWS Bedrock (Claude Sonnet 4). Reads incident log files and sends them to Bedrock for comprehensive analysis, returning structured results including root cause analysis, immediate fixes, preventive measures, and recommendations. Works offline with log files even after infrastructure is torn down. Saves analysis results to the bedrock-analysis directory with unique process IDs to avoid conflicts. 

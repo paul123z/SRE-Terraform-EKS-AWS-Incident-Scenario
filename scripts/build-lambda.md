@@ -1,3 +1,3 @@
 # build-lambda.sh
 
-Creates a ZIP file containing the Lambda function code and dependencies. This script installs Python packages (boto3) and packages everything into `lambda/incident-analyzer.zip` for deployment to AWS Lambda. 
+Builds the incident-analyzer Lambda function package. Installs dependencies, creates the deployment ZIP file, and prepares it for upload to AWS Lambda. This script is part of the Lambda-based AI analysis workflow that was used before direct Bedrock integration. 

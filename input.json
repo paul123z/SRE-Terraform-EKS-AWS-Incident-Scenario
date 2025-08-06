@@ -1,0 +1,15 @@
+{
+  "inferenceConfig": {
+    "max_new_tokens": 1000
+  },
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "text": "this is where you place your input text"
+        }
+      ]
+    }
+  ]
+}

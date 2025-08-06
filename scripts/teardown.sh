@@ -122,6 +122,65 @@ cleanup_ebs_csi_driver() {
     fi
 }
 
+# Function to clean up S3 bucket
+cleanup_s3_bucket() {
+    print_status "Cleaning up S3 bucket..."
+    
+    cd terraform
+    
+    # Get bucket name from Terraform output
+    BUCKET_NAME=$(terraform output -raw incident_logs_bucket 2>/dev/null || echo "")
+    
+    if [ -n "$BUCKET_NAME" ]; then
+        print_status "Found S3 bucket: $BUCKET_NAME"
+        
+        # Remove all object versions (including delete markers)
+        print_status "Removing all object versions..."
+        $AWS_CMD s3api list-object-versions \
+            --bucket "$BUCKET_NAME" \
+            --region "$AWS_REGION" \
+            --query '{Objects: Versions[].{Key:Key,VersionId:VersionId}}' \
+            --output json > /tmp/versions.json 2>/dev/null || true
+        
+        if [ -s /tmp/versions.json ] && [ "$(jq -r '.Objects | length' /tmp/versions.json)" -gt 0 ]; then
+            $AWS_CMD s3api delete-objects \
+                --bucket "$BUCKET_NAME" \
+                --delete file:///tmp/versions.json \
+                --region "$AWS_REGION" || true
+            print_success "Object versions deleted"
+        fi
+        
+        # Remove all delete markers
+        print_status "Removing delete markers..."
+        $AWS_CMD s3api list-object-versions \
+            --bucket "$BUCKET_NAME" \
+            --region "$AWS_REGION" \
+            --query '{Objects: DeleteMarkers[].{Key:Key,VersionId:VersionId}}' \
+            --output json > /tmp/delete-markers.json 2>/dev/null || true
+        
+        if [ -s /tmp/delete-markers.json ] && [ "$(jq -r '.Objects | length' /tmp/delete-markers.json)" -gt 0 ]; then
+            $AWS_CMD s3api delete-objects \
+                --bucket "$BUCKET_NAME" \
+                --delete file:///tmp/delete-markers.json \
+                --region "$AWS_REGION" || true
+            print_success "Delete markers removed"
+        fi
+        
+        # Remove all objects (non-versioned)
+        print_status "Removing all objects..."
+        $AWS_CMD s3 rm "s3://$BUCKET_NAME" --recursive --region "$AWS_REGION" || true
+        
+        print_success "S3 bucket contents cleaned up"
+    else
+        print_status "S3 bucket not found in Terraform output"
+    fi
+    
+    # Clean up temporary files
+    rm -f /tmp/versions.json /tmp/delete-markers.json
+    
+    cd ..
+}
+
 # Function to destroy infrastructure
 destroy_infrastructure() {
     print_status "Destroying infrastructure with Terraform..."
@@ -179,6 +238,7 @@ show_cleanup_summary() {
     echo "✅ Monitoring stack (Prometheus/Grafana)"
     echo "✅ EBS CSI Driver and IAM policies"
     echo "✅ ECR repository and images"
+    echo "✅ S3 bucket and contents"
     echo "✅ Local Terraform state files"
     echo ""
     print_warning "Note: Some AWS resources may take a few minutes to fully delete"
@@ -218,6 +278,9 @@ main() {
     
     # Clean up EBS CSI Driver
     cleanup_ebs_csi_driver
+    
+    # Clean up S3 bucket
+    cleanup_s3_bucket
     
     # Destroy infrastructure
     destroy_infrastructure
