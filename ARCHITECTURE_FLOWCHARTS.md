@@ -82,9 +82,11 @@ graph TB
         GH_SECRETS[GitHub Secrets]
     end
     
-    subgraph "Local Development"
+    subgraph "Development & CI/CD"
         LOCAL[Local Machine]
-        DOCKER[Docker Build]
+        GH_BUILD[GitHub Actions Build]
+        DOCKER_LOCAL[Local Docker Build]
+        DOCKER_CI[CI Docker Build]
         TF[Terraform]
         KUBECTL[kubectl]
     end
@@ -140,24 +142,29 @@ graph TB
         RCA_REPORT[RCA Report]
     end
     
-    %% GitHub to Local
+    %% GitHub to Local/CI
     GH -->|Clone| LOCAL
     GH -->|Trigger| GH_ACTIONS
+    GH_ACTIONS -->|Trigger| GH_BUILD
     
-    %% Local to AWS
+    %% Local Development
+    LOCAL -->|Docker Build| DOCKER_LOCAL
+    DOCKER_LOCAL -->|Push| ECR
+    
+    %% CI/CD Pipeline
+    GH_BUILD -->|Docker Build| DOCKER_CI
+    DOCKER_CI -->|Push| ECR
+    GH_ACTIONS -->|Deploy| KUBECTL
+    KUBECTL -->|Apply| DEPLOYMENT
+    DEPLOYMENT -->|Pull Image| ECR
+    
+    %% Infrastructure
     LOCAL -->|Terraform Apply| TF
     TF -->|Provision| VPC
     TF -->|Create| EKS
     TF -->|Setup| ECR
     TF -->|Deploy| S3
     TF -->|Create| LAMBDA
-    
-    %% CI/CD Pipeline
-    GH_ACTIONS -->|Build| DOCKER
-    DOCKER -->|Push| ECR
-    GH_ACTIONS -->|Deploy| KUBECTL
-    KUBECTL -->|Apply| DEPLOYMENT
-    DEPLOYMENT -->|Pull Image| ECR
     
     %% Application Flow
     PODS -->|Pull Image| ECR
@@ -202,10 +209,10 @@ graph TB
     classDef monitoring fill:#F15922,stroke:#F15922,stroke-width:2px,color:#fff
     classDef ai fill:#8B5CF6,stroke:#8B5CF6,stroke-width:2px,color:#fff
     
-    class GH,GH_ACTIONS,GH_SECRETS github
+    class GH,GH_ACTIONS,GH_SECRETS,GH_BUILD github
     class VPC,PUB_SUBNET,PRIV_SUBNET,NAT,IGW,EKS,NODES,ECR,S3,LAMBDA,BEDROCK,CLOUDWATCH,ALB,TARGET_GROUP aws
     class PODS,DEPLOYMENT,SERVICE,HPA,INGRESS k8s
-    class LOCAL,DOCKER,TF,KUBECTL github
+    class LOCAL,DOCKER_LOCAL,DOCKER_CI,TF,KUBECTL github
     class PROMETHEUS,GRAFANA,ALERTMANAGER monitoring
     class LOGS,BEDROCK_ANALYSIS,LOCAL_FILES,RCA_REPORT ai
 ```
@@ -750,7 +757,9 @@ graph LR
 
 ### **Data Flow:**
 
-1. **Code → Build → Deploy**: GitHub → Docker Build → ECR Push → Kubernetes Pull → Application
+1. **Code → Build → Deploy**: 
+   - **Local**: Local Machine → Docker Build → ECR Push → Kubernetes Pull → Application
+   - **CI/CD**: GitHub → GitHub Actions → Docker Build → ECR Push → Kubernetes Pull → Application
 2. **Infrastructure**: Terraform → AWS → EKS → Monitoring
 3. **Monitoring**: Application → Prometheus → Grafana → Alerts
 4. **Incident Response**: Incident → Logs → Bedrock → Local Files → RCA
