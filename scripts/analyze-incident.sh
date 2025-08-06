@@ -113,7 +113,7 @@ trigger_lambda_analysis() {
     print_status "Lambda Function: $lambda_function"
     
     # Prepare payload
-    local payload=$(cat << EOF
+    local payload_json=$(cat << EOF
 {
     "incident_id": "$incident_id",
     "incident_type": "$incident_type",
@@ -122,15 +122,20 @@ trigger_lambda_analysis() {
 EOF
 )
     
+    # Base64 encode the payload
+    local payload=$(echo "$payload_json" | base64 -w 0)
+    
     # Invoke Lambda function
     print_status "Invoking Lambda function..."
+    
+    # Create base64 encoded payload
+    local payload_b64=$(echo "$payload_json" | base64 -w 0)
     
     local response
     response=$($AWS_CMD lambda invoke \
         --function-name "$lambda_function" \
-        --payload "$payload" \
+        --payload "$payload_b64" \
         --region "$AWS_REGION" \
-        --cli-binary-format raw-in-base64-out \
         /tmp/lambda_response.json 2>&1)
     
     if [ $? -ne 0 ]; then

@@ -274,6 +274,51 @@ EOF
     print_success "Application deployed successfully"
 }
 
+# Function to setup Kubernetes Dashboard
+setup_dashboard() {
+    print_status "Setting up Kubernetes Dashboard..."
+    
+    # Install the dashboard
+    kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.7.0/aio/deploy/recommended.yaml
+    
+    # Create admin service account
+    kubectl apply -f - <<EOF
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: dashboard-admin
+  namespace: kubernetes-dashboard
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: dashboard-admin
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+- kind: ServiceAccount
+  name: dashboard-admin
+  namespace: kubernetes-dashboard
+EOF
+    
+    # Wait for dashboard pods to be ready
+    print_status "Waiting for Kubernetes Dashboard to be ready..."
+    if kubectl wait --for=condition=ready pod -l k8s-app=kubernetes-dashboard -n kubernetes-dashboard --timeout=30s 2>/dev/null; then
+        print_success "Kubernetes Dashboard is ready"
+    else
+        # Check if pods are already running
+        if kubectl get pods -l k8s-app=kubernetes-dashboard -n kubernetes-dashboard --no-headers | grep -q "Running"; then
+            print_success "Kubernetes Dashboard is already running"
+        else
+            print_warning "Dashboard pods may still be starting up. You can check status with: kubectl get pods -n kubernetes-dashboard"
+        fi
+    fi
+    
+    print_success "Kubernetes Dashboard setup completed"
+}
+
 # Function to setup monitoring
 setup_monitoring() {
     print_status "Setting up monitoring..."
@@ -335,40 +380,6 @@ setup_monitoring() {
         --timeout 15m
     
     print_success "Monitoring setup completed"
-    
-    # Install Kubernetes Dashboard
-    print_status "Installing Kubernetes Dashboard..."
-    
-    # Install the dashboard
-    kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.7.0/aio/deploy/recommended.yaml
-    
-    # Create admin service account
-    kubectl apply -f - <<EOF
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: dashboard-admin
-  namespace: kubernetes-dashboard
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: dashboard-admin
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: cluster-admin
-subjects:
-- kind: ServiceAccount
-  name: dashboard-admin
-  namespace: kubernetes-dashboard
-EOF
-    
-    # Wait for dashboard pods to be ready
-    print_status "Waiting for Kubernetes Dashboard to be ready..."
-    kubectl wait --for=condition=ready pod -l app=kubernetes-dashboard -n kubernetes-dashboard --timeout=120s
-    
-    print_success "Kubernetes Dashboard installed successfully"
 }
 
 # Function to verify deployment
@@ -551,6 +562,9 @@ main() {
     
     # Deploy infrastructure
     deploy_infrastructure
+    
+    # Setup Kubernetes Dashboard (before app deployment)
+    setup_dashboard
     
     # Build and push application
     build_and_push_app

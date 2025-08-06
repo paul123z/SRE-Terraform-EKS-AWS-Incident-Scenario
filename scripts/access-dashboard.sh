@@ -38,15 +38,15 @@ check_dashboard_installation() {
     print_status "Checking Kubernetes Dashboard installation..."
     
     if ! kubectl get namespace $NAMESPACE &> /dev/null; then
-        print_warning "Kubernetes Dashboard namespace not found. Installing..."
-        install_dashboard
-        return
+        print_error "Kubernetes Dashboard namespace not found."
+        print_error "The dashboard should be installed during deployment. Please run ./scripts/deploy.sh first."
+        exit 1
     fi
     
-    if ! kubectl get pods -n $NAMESPACE -l app=kubernetes-dashboard &> /dev/null; then
-        print_warning "Kubernetes Dashboard pods not found. Installing..."
-        install_dashboard
-        return
+    if ! kubectl get pods -n $NAMESPACE -l k8s-app=kubernetes-dashboard &> /dev/null; then
+        print_error "Kubernetes Dashboard pods not found."
+        print_error "The dashboard should be installed during deployment. Please run ./scripts/deploy.sh first."
+        exit 1
     fi
     
     print_success "Kubernetes Dashboard is installed"
@@ -93,12 +93,12 @@ check_dashboard_status() {
     print_status "Checking dashboard status..."
     
     # Check if pods are running
-    local pod_count=$(kubectl get pods -n $NAMESPACE -l app=kubernetes-dashboard --no-headers | grep -c "Running" || echo "0")
+    local pod_count=$(kubectl get pods -n $NAMESPACE -l k8s-app=kubernetes-dashboard --no-headers | grep -c "Running" || echo "0")
     
     if [ "$pod_count" -eq 0 ]; then
         print_error "Dashboard pods are not running"
         print_status "Checking pod status..."
-        kubectl get pods -n $NAMESPACE -l app=kubernetes-dashboard
+        kubectl get pods -n $NAMESPACE -l k8s-app=kubernetes-dashboard
         return 1
     fi
     

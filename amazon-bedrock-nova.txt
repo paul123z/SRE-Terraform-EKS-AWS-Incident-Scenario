@@ -1,0 +1,91 @@
+PROMPT:
+
+Question for Amazon Bedrock:
+"I'm trying to use Amazon's Nova Lite model in Bedrock but having trouble with the invocation. Here's my situation:
+What I have:
+✅ Nova Lite shows 'Access granted' in AWS Bedrock console
+✅ AWS CLI is configured and working
+✅ I can list foundation models
+What I'm trying:
+
+
+aws bedrock-runtime invoke-model 
+
+--region us-east-1 
+
+--model-id "amazon.nova-lite-2024-05-20-v1:0" 
+
+--content-type "application/json" 
+
+--body '{"prompt": "Hello! Test message", "max_tokens": 50, "temperature": 0.7, "top_p": 0.9}' 
+
+--cli-binary-format raw-in-base64-out 
+
+nova-test.json
+The problem:
+Command completes without error messages
+But no response file is created
+Silent failure
+Questions:
+What's the correct model ID for Nova Lite?
+What's the correct request body format for Nova Lite?
+Do I need to use inference profiles for Nova Lite?
+What's the simplest working example to test Nova Lite?
+Can you give me the exact working command to test Nova Lite?"
+
+
+ANSWER:
+
+
+
+
+
+To help you troubleshoot and successfully invoke the Amazon Nova Lite model in Amazon Bedrock, let's go through each of your questions and provide the necessary details.
+
+1. Correct Model ID for Nova Lite
+The model ID for Amazon Nova Lite should be in the format amazon.nova-lite-YYYY-MM-DD-v1:0. Ensure you are using the correct date version. For example, if the latest version is 2024-05-20, the model ID should be amazon.nova-lite-2024-05-20-v1:0.
+
+2. Correct Request Body Format for Nova Lite
+The request body should be in JSON format and include the necessary parameters for the model. Here's an example of the correct request body:
+
+{
+    "inputText": "Hello! Test message",
+    "maxTokens": 50,
+    "temperature": 0.7,
+    "topP": 0.9
+}
+3. Inference Profiles for Nova Lite
+Inference profiles are not typically required for simple invocations. However, if you need to customize the model's behavior, you can create an inference profile in the Bedrock console.
+
+4. Simplest Working Example to Test Nova Lite
+Here's a simple working example to test the Nova Lite model:
+
+aws bedrock-runtime invoke-model \
+    --region us-east-1 \
+    --model-id "amazon.nova-lite-2024-05-20-v1:0" \
+    --content-type "application/json" \
+    --body '{"inputText": "Hello! Test message", "maxTokens": 50, "temperature": 0.7, "topP": 0.9}' \
+    --cli-binary-format raw-in-base64-out \
+    response.json
+5. Exact Working Command to Test Nova Lite
+Here's the exact command you can use to test the Nova Lite model:
+
+aws bedrock-runtime invoke-model \
+    --region us-east-1 \
+    --model-id "amazon.nova-lite-2024-05-20-v1:0" \
+    --content-type "application/json" \
+    --body '{"inputText": "Hello! Test message", "maxTokens": 50, "temperature": 0.7, "topP": 0.9}' \
+    --cli-binary-format raw-in-base64-out \
+    response.json
+Additional Steps
+Check the Output File: Ensure that the response.json file is created in the current directory and contains the response from the model.
+Check AWS Credentials and Permissions: Ensure that your AWS credentials have the necessary permissions to invoke the model.
+If the command still completes without errors but no response file is created, you might want to check the output of the command directly by removing the response.json part:
+
+aws bedrock-runtime invoke-model \
+    --region us-east-1 \
+    --model-id "amazon.nova-lite-2024-05-20-v1:0" \
+    --content-type "application/json" \
+    --body '{"inputText": "Hello! Test message", "maxTokens": 50, "temperature": 0.7, "topP": 0.9}' \
+    --cli-binary-format raw-in-base64-out
+This will print the response directly to the console, which can help you debug the issue.

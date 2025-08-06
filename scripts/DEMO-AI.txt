@@ -1,0 +1,3 @@
+[INFO] AI Incident Analysis (as per YouTube guide):
+- Run enhanced incident demo: ./scripts/incident-demo.sh
+- Analyze incidents with AI: ./scripts/analyze-incident.sh -i <incident-id>

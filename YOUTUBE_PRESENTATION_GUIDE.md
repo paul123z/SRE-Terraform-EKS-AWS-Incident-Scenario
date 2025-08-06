@@ -295,6 +295,38 @@ kubectl get nodes
 ```
 **Explain**: "Now we can interact with our Kubernetes cluster"
 
+#### **Step 8: Install Kubernetes Dashboard**
+```bash
+# Install Kubernetes Dashboard
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.7.0/aio/deploy/recommended.yaml
+
+# Create dashboard admin user
+kubectl apply -f - <<EOF
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: dashboard-admin
+  namespace: kubernetes-dashboard
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: dashboard-admin
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+- kind: ServiceAccount
+  name: dashboard-admin
+  namespace: kubernetes-dashboard
+EOF
+
+# Wait for dashboard to be ready (handles existing deployments)
+kubectl wait --for=condition=ready pod -l k8s-app=kubernetes-dashboard -n kubernetes-dashboard --timeout=30s || echo "Dashboard may already be running"
+```
+**Explain**: "This installs the Kubernetes Dashboard for cluster management. The wait command ensures the dashboard is fully ready before proceeding. If the dashboard is already running, it will skip the wait."
+
 ### 🐳 **Application Build & Push (3-4 minutes)**
 
 #### **Step 1: Build the Docker Image**
@@ -443,10 +475,10 @@ subjects:
   namespace: kubernetes-dashboard
 EOF
 
-# Wait for dashboard to be ready
-kubectl wait --for=condition=ready pod -l app=kubernetes-dashboard -n kubernetes-dashboard --timeout=120s
+# Wait for dashboard to be ready (handles existing deployments)
+kubectl wait --for=condition=ready pod -l k8s-app=kubernetes-dashboard -n kubernetes-dashboard --timeout=30s || echo "Dashboard may already be running"
 ```
-**Explain**: "This installs the Kubernetes Dashboard for cluster management. The wait command ensures the dashboard is fully ready before proceeding."
+**Explain**: "This installs the Kubernetes Dashboard for cluster management. The wait command ensures the dashboard is fully ready before proceeding. If the dashboard is already running, it will skip the wait."
 
 #### **Step 5: Access Grafana**
 ```bash
@@ -462,6 +494,8 @@ kubectl get svc prometheus-grafana -n monitoring -o jsonpath='{.status.loadBalan
 - **Find**: "Kubernetes / Compute Resources / Namespace (Pods)"
 - **Explain**: "This dashboard shows real-time CPU and memory usage for all pods in our namespace"
 
+**⚠️ SECURITY NOTE**: "The default password 'admin123' is for demo purposes only. In production environments, you should immediately change this password after first login for security best practices. This is a temporary demo setup that will be destroyed."
+
 #### **Step 6: Access Kubernetes Dashboard (Optional)**
 ```bash
 # Option 1: Automated access (Recommended)
@@ -474,6 +508,7 @@ kubectl proxy
 # Generate access token
 ./scripts/get-dashboard-token.sh
 ```
+**Explain**: "The dashboard is already installed from Step 8, so this just provides access to it"
 **Show**: "Kubernetes Dashboard at http://localhost:8001/api/v1/namespaces/kubernetes-dashboard/services/https:kubernetes-dashboard:/proxy/"
 **Explain**: "Use the token from the script to log into the dashboard"
 
@@ -501,6 +536,8 @@ kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80
 - **Credentials**: `admin` / `admin123`
 - **Navigate to**: Dashboards → Browse → "Kubernetes / Compute Resources / Namespace (Pods)"
 - **Explain**: "This dashboard shows real-time CPU and memory usage for all pods in our namespace"
+
+**⚠️ SECURITY NOTE**: "The default password 'admin123' is for demo purposes only. In production environments, you should immediately change this password after first login for security best practices. This is a temporary demo setup that will be destroyed."
 
 #### **Step 3: Simulate Memory Leak Incident**
 ```bash

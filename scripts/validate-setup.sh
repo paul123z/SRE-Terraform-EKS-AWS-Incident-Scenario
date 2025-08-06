@@ -213,8 +213,8 @@ check_demo_scripts() {
         missing_scripts+=("scripts/incident-demo.sh")
     fi
     
-    if [ ! -f "scripts/analyze-incident.sh" ]; then
-        missing_scripts+=("scripts/analyze-incident.sh")
+    if [ ! -f "scripts/analyze-incident-simple.sh" ]; then
+        missing_scripts+=("scripts/analyze-incident-simple.sh")
     fi
     
     if [ ! -f "scripts/teardown.sh" ]; then

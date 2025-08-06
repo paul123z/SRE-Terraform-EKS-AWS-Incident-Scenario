@@ -1,0 +1,38 @@
+kubectl proxy
+
+ Grafana Login Credentials
+kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80
+URL: http://localhost:3000
+Username: admin
+Password: admin123
+
+kubectl proxy
+http://localhost:8001/api/v1/namespaces/kubernetes-dashboard/services/https:kubernetes-dashboard:/proxy/#/login
+generate token:
+./scripts/get-dashboard-token.sh
+
+ What kubectl proxy Does
+kubectl proxy does NOT install any pods - it's a local proxy service that runs on your machine. Here's what it does:
+️ Local Proxy Servicebashkubectl proxy# This starts a local web server on your machine (usually port 8001)# It acts as a proxy between your browser and the Kubernetes API server
+ How It WorkstextYour Browser → kubectl proxy (localhost:8001) → Kubernetes API Server → EKS Cluster
+ What Was Actually Needed
+1. Kubernetes Dashboard Installation ✅
+The pods you see in the kubernetes-dashboard namespace were installed when you ran:
+bash
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.7.0/aio/deploy/recommended.yaml
+This installed:
+kubernetes-dashboard pod
+dashboard-metrics-scraper pod
+Dashboard services
+2. Service Account & Permissions ✅
+You also needed to create:
+bash
+kubectl create serviceaccount admin-user -n kubernetes-dashboard
+kubectl create clusterrolebinding admin-user --clusterrole=cluster-admin --serviceaccount=kubernetes-dashboard:admin-user
+3. kubectl proxy ✅
+This just starts a local proxy service - no pods installed.
+ The Complete Flow
+Dashboard Installation → Creates dashboard pods in cluster
+Service Account Creation → Creates admin user with permissions
+kubectl proxy → Starts local proxy service
+Browser Access → localhost:8001 → Dashboard pods

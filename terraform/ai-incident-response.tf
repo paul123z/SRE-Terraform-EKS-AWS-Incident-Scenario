@@ -100,9 +100,9 @@ resource "aws_iam_role_policy" "incident_analyzer_lambda" {
         Action = [
           "bedrock:InvokeModel"
         ]
-        Resource = [
-          "arn:aws:bedrock:eu-central-1::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0"
-        ]
+                              Resource = [
+                          "arn:aws:bedrock:us-west-1::foundation-model/anthropic.claude-sonnet-4-20250514-v1:0"
+                      ]
       }
     ]
   })
@@ -129,7 +129,7 @@ resource "aws_lambda_function" "incident_analyzer" {
   environment {
     variables = {
       S3_BUCKET = aws_s3_bucket.incident_logs.bucket
-      BEDROCK_MODEL = "anthropic.claude-3-sonnet-20240229-v1:0"
+      BEDROCK_MODEL = "anthropic.claude-sonnet-4-20250514-v1:0"
     }
   }
 

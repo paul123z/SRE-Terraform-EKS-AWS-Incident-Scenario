@@ -407,9 +407,9 @@ demo_incident() {
     print_status "Incident logs have been uploaded to S3 for AI analysis."
     print_status "You can now run the AI analysis script to get detailed RCA:"
     echo ""
-    print_status "Run: ./scripts/analyze-incident.sh -i $INCIDENT_ID"
+    print_status "Run: ./scripts/analyze-incident-simple.sh $INCIDENT_ID"
     echo ""
-    print_status "This will use AWS Bedrock to analyze the logs and provide:"
+    print_status "This will use AI-powered analysis to examine the logs and provide:"
     echo "  • Root cause analysis"
     echo "  • Immediate fixes"
     echo "  • Preventive measures"
@@ -420,12 +420,12 @@ demo_incident() {
     read -p "Press Enter to run AI analysis now (or Ctrl+C to skip)..."
     
     # Run AI analysis
-    if [ -f "./scripts/analyze-incident.sh" ]; then
+    if [ -f "./scripts/analyze-incident-simple.sh" ]; then
         print_status "Running AI analysis..."
-        ./scripts/analyze-incident.sh -i "$INCIDENT_ID" -t "memory_leak" -r 30
+        ./scripts/analyze-incident-simple.sh "$INCIDENT_ID"
     else
         print_warning "AI analysis script not found. Please run manually:"
-        print_status "./scripts/analyze-incident.sh -i $INCIDENT_ID"
+        print_status "./scripts/analyze-incident-simple.sh $INCIDENT_ID"
     fi
     
     # Summary
@@ -442,6 +442,23 @@ demo_incident() {
     echo "✅ AI-Powered RCA Analysis (AWS Bedrock)"
     echo ""
     print_status "This demonstrates a complete SRE incident response process with AI enhancement!"
+    echo ""
+    
+    # AI Explanation
+    print_header "🤖 HOW AI ENHANCES INCIDENT RESPONSE"
+    echo ""
+    print_status "Our AI system works in two ways:"
+    echo "  1. 📊 Analyzes logs and metrics to identify patterns"
+    echo "  2. 🧠 Provides intelligent recommendations for fixes"
+    echo ""
+    print_status "What the AI does:"
+    echo "  • Reads through all the logs we collected"
+    echo "  • Identifies the root cause of the problem"
+    echo "  • Suggests immediate fixes to resolve the issue"
+    echo "  • Recommends ways to prevent it from happening again"
+    echo "  • Provides lessons learned for future incidents"
+    echo ""
+    print_status "This saves hours of manual analysis and helps SREs respond faster!"
     echo ""
 }
 
