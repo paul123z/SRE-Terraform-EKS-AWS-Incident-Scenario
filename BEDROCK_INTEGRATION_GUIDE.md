@@ -80,8 +80,22 @@ aws bedrock-runtime invoke-model \
 ```bash
 # Make scripts executable
 chmod +x scripts/analyze-incident-bedrock.sh
-chmod +x scripts/test-bedrock-analysis.sh
+chmod +x .github/test-analyze-s3-logs.sh
 ```
+
+## 🚨 Important: Working Implementation Details
+
+### Why AWS CLI Works (Not boto3)
+During development, we discovered that **boto3 was not working reliably** for Bedrock calls. The only working implementations were:
+
+1. **`bedrock-curl-WORKS.sh`** - Direct curl implementation
+2. **`scripts/analyze-incident-bedrock.sh`** - AWS CLI implementation
+
+### Key Technical Solutions
+- **JSON Escaping**: Use temporary files and `jq -Rs .` to avoid "Malformed input request" errors
+- **File-based Calls**: Use `file://` parameter instead of inline JSON
+- **Cross-region**: Local logs + Remote Bedrock (us-west-1) analysis
+- **Error Handling**: Graceful fallback for parsing issues
 
 ## 🎯 Usage
 

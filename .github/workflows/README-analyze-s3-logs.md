@@ -1,188 +1,203 @@
 # GitHub Actions: S3 Log Analysis with Bedrock
 
-## Overview
-This GitHub Actions workflow provides a manual way to analyze S3 log files using AWS Bedrock (Claude Sonnet 4) for AI-powered incident analysis.
+## 🚀 Quick Start Instructions
 
-## How to Use
+### 1. Get S3 Object URL
+1. Go to AWS S3 Console
+2. Navigate to your bucket: `sre-incident-demo-incident-logs-XXXXX`
+3. Find your incident log file in the `incidents/` folder
+4. Click on the log file to open its properties
+5. **Copy the Object URL** (see image below for reference)
+   - Click the "Copy" button next to "Object URL"
+   - Format: `https://bucket-name.s3.region.amazonaws.com/path/to/log.log`
 
-### 1. Prerequisites
-- AWS credentials configured in GitHub Secrets:
-  - `AWS_ACCESS_KEY_ID`
-  - `AWS_SECRET_ACCESS_KEY`
-- AWS Bedrock access enabled
-- S3 bucket with log files
+![S3 Object URL Copy](https://i.imgur.com/example.png)
+*Reference: S3 Console showing how to copy Object URL from Properties tab*
 
-### 2. Running the Workflow
+### 2. Run GitHub Workflow
+1. Go to your GitHub repository → Actions tab
+2. Select "Analyze S3 Logs with Bedrock" workflow
+3. Click "Run workflow"
+4. Paste the S3 Object URL
+5. Click "Run workflow"
 
-#### Manual Trigger
-1. Go to your GitHub repository
-2. Click on "Actions" tab
-3. Select "Analyze S3 Logs with Bedrock" workflow
-4. Click "Run workflow"
-5. Fill in the parameters:
-   - **S3 Object URL**: The URL to your log file
-   - **Incident Type**: Type of incident (optional)
+## 📊 Workflow Architecture
 
-#### Supported URL Formats
-- **S3 URI**: `s3://bucket-name/path/to/log.log`
-- **HTTPS URL**: `https://bucket-name.s3.region.amazonaws.com/path/to/log.log`
-
-### 3. Example URLs
-
-Based on your S3 bucket structure:
-```
-https://sre-incident-demo-incident-logs-l35a3g7s.s3.eu-central-1.amazonaws.com/incidents/demo-incident-20250807-222634/incident-demo-incident-20250807-222634.log
-```
-
-Or using S3 URI:
-```
-s3://sre-incident-demo-incident-logs-l35a3g7s/incidents/demo-incident-20250807-222634/incident-demo-incident-20250807-222634.log
-```
-
-## What the Workflow Does
-
-### 1. Setup Phase
-- Installs AWS CLI v2
-- Configures AWS credentials
-- Verifies Bedrock access
-
-### 2. Log Retrieval
-- Parses the S3 URL to extract bucket and key
-- Downloads the log file from S3
-- Shows log file preview
-
-### 3. AI Analysis
-- Creates an analysis prompt for Bedrock
-- Calls AWS Bedrock (Claude Sonnet 4)
-- Parses the AI response
-
-### 4. Results Display
-- Shows structured analysis in the GitHub Actions console
-- Includes:
-  - Incident summary (type, severity, duration)
-  - Root cause analysis
-  - Immediate fixes
-  - Recommendations
-  - Lessons learned
-
-### 5. Artifacts
-- Uploads analysis results as artifacts
-- Includes the original log file and Bedrock response
-- Available for download for 7 days
-
-## Output Example
-
-```
-🤖 AI-POWERED INCIDENT ANALYSIS
-
-[INFO] Analyzing log file: ./incident-log.log
-[INFO] Incident type: memory_leak
-[INFO] Bedrock model: us.anthropic.claude-sonnet-4-20250514-v1:0
-[INFO] AWS region: us-west-1
-
-[INFO] Log content loaded (size: 19181 characters)
-[INFO] Invoking AWS Bedrock for analysis...
-[SUCCESS] Bedrock analysis completed successfully!
-
-📊 INCIDENT ANALYSIS RESULTS
-
-INCIDENT SUMMARY:
-  Type: Memory leak simulation incident with HPA scaling issues
-  Severity: MEDIUM
-  Duration: Approximately 2 minutes (20:26:55 - 20:28:08)
-
-ROOT CAUSE ANALYSIS:
-  Primary Cause: Memory leak simulation was enabled in the application via API call
-
-IMMEDIATE FIX: HIGH - Disabled memory leak simulation via application API
-IMMEDIATE FIX: HIGH - Restarted affected pods to clear memory state
-
-RECOMMENDATION (MONITORING): Deploy and configure metrics-server properly (Impact: HIGH)
-RECOMMENDATION (ALERTING): Create alerts for HPA scaling failures (Impact: HIGH)
-RECOMMENDATION (INFRASTRUCTURE): Set appropriate resource requests and limits (Impact: MEDIUM)
-
-LESSON: HPA cannot function properly without reliable metrics from the resource metrics API
-LESSON: Memory leaks can be quickly identified and resolved when proper monitoring is in place
-
-✅ Analysis completed successfully!
+```mermaid
+graph TB
+    A[Manual Trigger] --> B[GitHub Actions Runner]
+    B --> C[Configure AWS Credentials]
+    C --> D[Install Dependencies]
+    D --> E[Download Log from S3]
+    E --> F[Run AI Analysis Script]
+    F --> G[Call AWS Bedrock]
+    G --> H[Parse AI Response]
+    H --> I[Display Results in Console]
+    I --> J[Upload Artifacts]
+    
+    subgraph "AWS Services"
+        S3[S3 Bucket]
+        BEDROCK[AWS Bedrock]
+    end
+    
+    subgraph "Analysis Script"
+        SCRIPT[analyze-s3-logs-script.sh]
+    end
+    
+    E --> S3
+    G --> BEDROCK
+    F --> SCRIPT
+    
+    classDef trigger fill:#6366F1,stroke:#333,stroke-width:2px,color:#fff
+    classDef bedrock fill:#7B42BC,stroke:#333,stroke-width:2px,color:#fff
+    classDef results fill:#00D4AA,stroke:#333,stroke-width:2px,color:#000
+    
+    class A trigger
+    class G bedrock
+    class I,J results
 ```
 
-## Configuration
+## 🔄 How It Works
 
-### AWS Credentials
-Add these secrets to your GitHub repository:
-1. Go to Settings → Secrets and variables → Actions
-2. Add repository secrets:
-   - `AWS_ACCESS_KEY_ID`: Your AWS access key
-   - `AWS_SECRET_ACCESS_KEY`: Your AWS secret key
+### Phase 1: Setup & Authentication
+- **GitHub Actions Runner**: Ubuntu latest environment
+- **AWS CLI Installation**: Handles existing installations gracefully
+- **Credential Configuration**: Uses GitHub Secrets for secure access
+- **Bedrock Verification**: Confirms model access before analysis
 
-### Required AWS Permissions
-The AWS credentials need:
-- S3 read access to the bucket
-- Bedrock invoke access for the Claude model
+### Phase 2: Log Retrieval
+- **URL Parsing**: Supports both S3 URI and HTTPS formats
+- **S3 Download**: Retrieves log file from specified bucket/key
+- **File Validation**: Checks file existence and size
+- **Preview Display**: Shows first 500 characters for verification
 
-### IAM Policy Example
+### Phase 3: AI Analysis
+- **Prompt Creation**: Uses temporary files to avoid JSON escaping issues
+- **Bedrock Call**: Invokes Claude Sonnet 4 with structured prompt
+- **Response Processing**: Extracts and formats AI analysis
+- **Error Handling**: Graceful fallback for parsing issues
+
+### Phase 4: Results & Artifacts
+- **Console Display**: Shows formatted analysis in GitHub Actions logs
+- **Full Response**: Displays complete Bedrock response for debugging
+- **Artifact Upload**: Saves results for 7-day retention
+- **Summary Statistics**: Shows token usage and response metadata
+
+## 📋 Supported URL Formats
+
+### HTTPS URL (Recommended)
+```
+https://sre-incident-demo-incident-logs-l35a3g7s.s3.eu-central-1.amazonaws.com/incidents/demo-incident-20250807-232440/incident-demo-incident-20250807-232440.log
+```
+
+### S3 URI
+```
+s3://sre-incident-demo-incident-logs-l35a3g7s/incidents/demo-incident-20250807-232440/incident-demo-incident-20250807-232440.log
+```
+
+## 🎯 Example Usage
+
+### Step-by-Step Process
+1. **Incident Occurs**: Your incident demo creates logs
+2. **Logs Uploaded**: Logs are automatically pushed to S3
+3. **Get URL**: Copy Object URL from S3 console
+4. **Run Analysis**: Execute GitHub workflow with URL
+5. **Review Results**: Check console output and download artifacts
+
+### Console Output Example
+```
+=== FULL BEDROCK RESPONSE ===
+📄 Bedrock Response File Contents:
+{"id":"msg_bdrk_019jE6KgkeqE5eqFxzeg3ugU","type":"message","role":"assistant",...}
+
+📊 Response Summary:
+File size: 12345 bytes
+Response ID: msg_bdrk_019jE6KgkeqE5eqFxzeg3ugU
+Model used: claude-sonnet-4-20250514
+Stop reason: end_turn
+Input tokens: 3110
+Output tokens: 956
+=== END BEDROCK RESPONSE ===
+```
+
+## 📁 Artifacts Generated
+
+After workflow completion, download the `analysis-results` artifact containing:
+- `bedrock-response.json` - Raw Bedrock API response
+- `incident-log.log` - Original log file from S3
+- `analysis-results.txt` - Formatted analysis results
+
+## 🔧 Configuration
+
+### GitHub Secrets Required
+```bash
+AWS_ACCESS_KEY_ID=your_access_key
+AWS_SECRET_ACCESS_KEY=your_secret_key
+```
+
+### AWS Permissions Needed
 ```json
 {
     "Version": "2012-10-17",
     "Statement": [
         {
             "Effect": "Allow",
-            "Action": [
-                "s3:GetObject"
-            ],
-            "Resource": "arn:aws:s3:::your-bucket-name/*"
+            "Action": ["s3:GetObject"],
+            "Resource": "arn:aws:s3:::sre-incident-demo-incident-logs-*/*"
         },
         {
             "Effect": "Allow",
-            "Action": [
-                "bedrock:InvokeModel"
-            ],
+            "Action": ["bedrock:InvokeModel"],
             "Resource": "arn:aws:bedrock:us-west-1::foundation-model/us.anthropic.claude-sonnet-4-20250514-v1:0"
         }
     ]
 }
 ```
 
-## Troubleshooting
+## 🚨 Troubleshooting
 
-### Common Issues
+### Common Issues & Solutions
 
-1. **Invalid S3 URL Format**
-   - Use the exact format: `https://bucket.s3.region.amazonaws.com/key`
-   - Or S3 URI: `s3://bucket/key`
-
-2. **AWS Credentials Error**
-   - Verify secrets are set correctly
-   - Check AWS permissions
-
-3. **Bedrock Access Denied**
-   - Ensure Bedrock is enabled in your AWS account
-   - Verify model access in AWS console
-
-4. **Log File Not Found**
-   - Check the S3 URL is correct
-   - Verify the file exists in S3
+| Issue | Solution |
+|-------|----------|
+| **Invalid S3 URL** | Use exact format: `https://bucket.s3.region.amazonaws.com/key` |
+| **AWS Credentials Error** | Verify GitHub Secrets are set correctly |
+| **Bedrock Access Denied** | Enable Bedrock in AWS console and grant model access |
+| **Log File Not Found** | Check S3 URL and verify file exists |
+| **Malformed Input Request** | Script handles JSON escaping automatically |
 
 ### Debug Information
-The workflow provides detailed logging:
-- AWS CLI version
-- Bedrock model availability
-- S3 download status
-- Analysis progress
+The workflow provides comprehensive logging:
+- ✅ AWS CLI version and installation status
+- ✅ Bedrock model availability check
+- ✅ S3 download progress and file size
+- ✅ Analysis script execution details
+- ✅ Full Bedrock response display
 
-## Integration with Your Workflow
+## 🔗 Integration Points
 
-This workflow can be integrated with your existing CI/CD pipeline:
+### With Incident Demo
+1. **Local Analysis**: `scripts/analyze-incident-bedrock.sh` (uses `/tmp` logs)
+2. **S3 Analysis**: This workflow (uses S3 logs)
+3. **Log Flow**: `incident-demo.sh` → Local logs → S3 upload → This workflow
 
-1. **After Incident Demo**: Automatically analyze logs
-2. **Manual Analysis**: On-demand analysis of specific incidents
-3. **Scheduled Analysis**: Regular analysis of new logs
+### With CI/CD Pipeline
+- **Manual Trigger**: On-demand analysis of specific incidents
+- **Automated**: Can be triggered after incident demos
+- **Scheduled**: Regular analysis of new S3 logs
 
-## Benefits
+## 💡 Benefits
 
-- **No Local Setup**: Runs in GitHub Actions environment
-- **Consistent Analysis**: Same AI model and prompt every time
-- **Structured Output**: JSON-formatted results
-- **Artifact Storage**: Results saved for later review
-- **Cross-Platform**: Works from any device with web access
+- **🌐 No Local Setup**: Runs entirely in GitHub Actions
+- **🤖 Consistent AI Analysis**: Same model and prompt every time
+- **📊 Structured Output**: JSON-formatted results with metadata
+- **💾 Persistent Storage**: Results saved as artifacts for 7 days
+- **🔍 Full Visibility**: Complete Bedrock response for debugging
+- **📱 Cross-Platform**: Works from any device with web access
+
+## 📈 Performance
+
+- **Typical Runtime**: 30-60 seconds
+- **Token Usage**: ~3000 input tokens, ~1000 output tokens
+- **File Size Limit**: Handles logs up to several MB
+- **Concurrent Runs**: Supports multiple simultaneous analyses

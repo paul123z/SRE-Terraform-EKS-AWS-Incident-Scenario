@@ -751,6 +751,59 @@ graph LR
 
 ---
 
+## 🔄 Analysis Methods Comparison
+
+### **Local Analysis vs S3 Analysis Flow**
+
+```mermaid
+graph TB
+    subgraph "Local Analysis Path"
+        A1[incident-demo.sh] --> B1[Creates logs in /tmp]
+        B1 --> C1[analyze-incident-bedrock.sh]
+        C1 --> D1[Reads from /tmp/incident-logs/]
+        D1 --> E1[AWS Bedrock Analysis]
+        E1 --> F1[Local Results in bedrock-analysis/]
+    end
+    
+    subgraph "S3 Analysis Path"
+        A2[incident-demo.sh] --> B2[Pushes logs to S3]
+        B2 --> C2[GitHub Workflow analyze-s3-logs.yml]
+        C2 --> D2[Downloads from S3]
+        D2 --> E2[AWS Bedrock Analysis]
+        E2 --> F2[GitHub Artifacts]
+    end
+    
+    subgraph "AWS Services"
+        S3[S3 Bucket]
+        BEDROCK[AWS Bedrock]
+    end
+    
+    B2 --> S3
+    D2 --> S3
+    E1 --> BEDROCK
+    E2 --> BEDROCK
+    
+    classDef demo fill:#6366F1,stroke:#333,stroke-width:2px,color:#fff
+    classDef bedrock fill:#7B42BC,stroke:#333,stroke-width:2px,color:#fff
+    classDef results fill:#00D4AA,stroke:#333,stroke-width:2px,color:#000
+    
+    class A1,A2 demo
+    class E1,E2 bedrock
+    class F1,F2 results
+```
+
+### **Key Differences:**
+
+| Aspect | Local Analysis | S3 Analysis |
+|--------|----------------|-------------|
+| **Trigger** | Manual after demo | Manual with S3 URL |
+| **Input Source** | `/tmp/incident-logs/` | S3 Object URL |
+| **Processing** | Real-time during demo | Post-demo analysis |
+| **Output** | Local files | GitHub artifacts |
+| **Use Case** | Demo analysis | Post-demo review |
+
+---
+
 ## 📋 Architecture Summary
 
 ### **Key Components:**
@@ -760,7 +813,7 @@ graph LR
 3. **AWS Infrastructure**: VPC, EKS, ECR, S3, Lambda, Bedrock
 4. **Kubernetes Resources**: Deployments, Services, HPA, Ingress
 5. **Monitoring Stack**: Prometheus, Grafana, Alert Manager
-6. **AI Incident Response**: Log capture, direct Bedrock analysis, local file storage, RCA generation
+6. **AI Incident Response**: Multiple analysis paths (local, S3, Lambda)
 
 ### **Data Flow:**
 
@@ -769,14 +822,16 @@ graph LR
    - **CI/CD**: GitHub → GitHub Actions → Docker Build → ECR Push → Kubernetes Pull → Application
 2. **Infrastructure**: Terraform → AWS → EKS → Monitoring
 3. **Monitoring**: Application → Prometheus → Grafana → Alerts
-4. **Incident Response**: Incident → Logs → Bedrock → Local Files → RCA
+4. **Incident Response**: 
+   - **Local**: Incident → Local Logs → Bedrock → Local Files
+   - **S3**: Incident → S3 Logs → GitHub Workflow → Bedrock → Artifacts
 
 ### **Key Benefits:**
 
 - **Complete Automation**: From code push to production deployment
 - **Comprehensive Monitoring**: Full-stack observability
-- **AI-Powered Analysis**: Intelligent incident response
+- **AI-Powered Analysis**: Multiple analysis methods for different use cases
 - **Scalable Architecture**: Production-ready design
 - **Cost Optimization**: Efficient resource utilization
 
-This architecture demonstrates a modern, cloud-native SRE environment with AI-enhanced incident response capabilities. 
+This architecture demonstrates a modern, cloud-native SRE environment with AI-enhanced incident response capabilities and flexible analysis options. 

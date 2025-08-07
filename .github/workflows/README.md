@@ -76,6 +76,32 @@ This directory contains GitHub Actions workflows for the SRE Demo project. All w
 
 ---
 
+### **4. `analyze-s3-logs.yml` - S3 Log Analysis with Bedrock**
+**Purpose**: AI-powered incident log analysis using AWS Bedrock (Claude Sonnet 4).
+
+**Trigger**: Manual (`workflow_dispatch`)
+
+**What it does**:
+- ✅ **S3 Download**: Retrieves log files from S3 bucket
+- ✅ **AI Analysis**: Uses AWS Bedrock for intelligent incident analysis
+- ✅ **Structured Output**: Provides formatted incident summary, root cause, and recommendations
+- ✅ **Artifacts**: Saves analysis results for 7-day retention
+- ✅ **Full Response**: Displays complete Bedrock response for debugging
+
+**Use case**: Analyze incident logs stored in S3 after running incident demos.
+
+**Estimated runtime**: 30-60 seconds
+
+**Required secrets**:
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+
+**Prerequisites**: S3 bucket with incident logs, AWS Bedrock access enabled.
+
+**Input**: S3 Object URL (HTTPS or S3 URI format)
+
+---
+
 ## 🚀 How to Use
 
 ### **Infrastructure Setup (Local Terraform Only)**

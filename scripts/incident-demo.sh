@@ -705,11 +705,11 @@ check_prerequisites() {
     fi
     
     # Check if application is deployed
-    if ! $KUBECTL_CMD get deployment sre-demo-app &> /dev/null; then
-        print_error "sre-demo-app deployment not found"
-        print_status "Please deploy the application first: ./scripts/deploy.sh"
-        exit 1
-    fi
+if ! $KUBECTL_CMD get deployment sre-demo-app &> /dev/null; then
+    print_error "sre-demo-app deployment not found"
+    print_status "Please deploy the application first: ./scripts/deploy.sh"
+    exit 1
+fi
     
     # Check if Bedrock analysis script is available and executable
     if [ ! -f "./scripts/analyze-incident-bedrock.sh" ] || [ ! -x "./scripts/analyze-incident-bedrock.sh" ]; then
