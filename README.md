@@ -89,14 +89,20 @@ This open-source SRE project consists of several interconnected components, each
 - Cost-optimized storage and resource allocation
 
 ### 🔄 **CI/CD Setup (GitHub Actions)**
-**Purpose**: Automates the build, test, and deployment process for application delivery.
+**Purpose**: Automates the build, test, and deployment process for application delivery, plus AI-powered incident analysis.
 
 **What it automates**:
 - **Testing Phase**: Runs Node.js tests to validate application functionality
 - **Build Phase**: Creates Docker images and pushes them to AWS ECR
 - **Deployment Phase**: Uses Helm to deploy updated applications to EKS
 - **Verification**: Checks deployment status and application health
+- **AI Incident Analysis**: `analyze-s3-logs.yml` workflow for automated log analysis using AWS Bedrock
 - **Multi-environment Support**: Can be extended for staging/production environments
+
+**GitHub Workflows**:
+- **`build-push-deploy-app.yml`**: Full CI/CD pipeline for application deployment
+- **`deploy-app-only.yml`**: Quick deployment of existing images
+- **`analyze-s3-logs.yml`**: AI-powered incident log analysis using S3 object URLs
 
 **Important**: Infrastructure provisioning is done **locally with Terraform** for security and cost control.
 
@@ -105,6 +111,7 @@ This open-source SRE project consists of several interconnected components, each
 - Consistent deployment process across environments
 - Built-in testing and validation steps
 - Infrastructure state file security (local only)
+- AI-powered incident analysis integrated into CI/CD pipeline
 
 ### 🚨 **Incident Simulation Setup (Scripts)**
 **Purpose**: Provides tools and scenarios for realistic incident response training.
@@ -121,20 +128,27 @@ This open-source SRE project consists of several interconnected components, each
 - Integration with real monitoring and alerting systems
 
 ### 🤖 **AI-Powered Incident Response (AWS Bedrock)**
-**Purpose**: Provides intelligent incident analysis and Root Cause Analysis (RCA) using AWS Bedrock.
+**Purpose**: Provides intelligent incident analysis and Root Cause Analysis (RCA) using AWS Bedrock with multiple analysis paths.
 
 **What it includes**:
-- **S3 Log Storage**: Secure, encrypted storage for incident logs and metrics
-- **Lambda Function**: Serverless function that analyzes logs using AWS Bedrock
-- **AI Analysis Engine**: Uses Claude 3 Sonnet for comprehensive incident analysis
+- **Dual Log Storage**: Incident logs stored both locally (`/tmp`) and in S3 for flexible analysis
+- **Local AI Analysis**: Direct Bedrock integration via `analyze-incident-bedrock.sh` for immediate analysis
+- **GitHub Workflow Analysis**: CI/CD-based analysis via `analyze-s3-logs.yml` for remote/team collaboration
+- **AI Analysis Engine**: Uses Claude Sonnet 4 for comprehensive incident analysis
 - **Automated RCA Reports**: Generates structured reports with root causes, fixes, and recommendations
 - **Real-time Log Capture**: Automatically captures logs during incident simulation
 
+**Analysis Methods**:
+1. **Local Analysis**: `./scripts/analyze-incident-bedrock.sh` - Reads logs from `/tmp` and analyzes with AWS Bedrock
+2. **GitHub Workflow**: `analyze-s3-logs.yml` - Ubuntu runner with AWS CLI, takes S3 object URL as parameter
+
 **Key Benefits**:
 - Faster incident resolution with AI-powered insights
+- Multiple analysis paths for different use cases (local vs. remote)
 - Comprehensive RCA reports with actionable recommendations
 - Automated analysis reduces manual investigation time
 - Historical incident analysis for continuous improvement
+- CI/CD integration for team collaboration and automation
 
 ### 🛠️ **Utility Scripts Setup**
 **Purpose**: Provides automation for common operational tasks.
