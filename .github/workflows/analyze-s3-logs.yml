@@ -102,4 +102,5 @@ jobs:
         path: |
           bedrock-response.json
           incident-log.log
+          analysis-results.txt
         retention-days: 7

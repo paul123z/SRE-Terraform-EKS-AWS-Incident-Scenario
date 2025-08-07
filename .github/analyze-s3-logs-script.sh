@@ -54,7 +54,7 @@ print_status "Log content loaded (size: $LOG_SIZE characters)"
 
 # Create analysis prompt using temporary file to avoid JSON escaping issues
 TEMP_PROMPT_FILE="./bedrock_prompt_$$.txt"
-cat > "$TEMP_PROMPT_FILE" << 'PROMPT_EOF'
+cat > "$TEMP_PROMPT_FILE" << 'EOF'
 You are an expert SRE (Site Reliability Engineer) analyzing a Kubernetes incident. Please analyze the following incident log data and provide a comprehensive incident analysis report.
 
 Please provide your analysis in the following JSON format:
@@ -107,7 +107,7 @@ Focus on:
 Be specific and actionable in your recommendations.
 
 INCIDENT LOG DATA:
-PROMPT_EOF
+EOF
 
 # Append the log content to the prompt file
 echo "$LOGS_CONTENT" >> "$TEMP_PROMPT_FILE"
@@ -117,7 +117,7 @@ ANALYSIS_PROMPT=$(cat "$TEMP_PROMPT_FILE")
 
 # Create the Bedrock request payload file
 BEDROCK_PAYLOAD_FILE="./bedrock_payload_$$.json"
-cat > "$BEDROCK_PAYLOAD_FILE" << PAYLOAD_EOF
+cat > "$BEDROCK_PAYLOAD_FILE" << EOF
 {
   "anthropic_version": "bedrock-2023-05-31",
   "messages": [
@@ -129,7 +129,7 @@ cat > "$BEDROCK_PAYLOAD_FILE" << PAYLOAD_EOF
   "temperature": 0.3,
   "max_tokens": 2000
 }
-PAYLOAD_EOF
+EOF
 
 print_status "Invoking AWS Bedrock for analysis..."
 
