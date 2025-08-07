@@ -555,43 +555,67 @@ curl -X POST http://$SERVICE_URL/api/memory-leak \
 
 ### 🤖 **AI-Powered Incident Analysis (4-5 minutes)**
 
-#### **Step 1: Build AI Infrastructure (Before Terraform)**
-```bash
-# Build Lambda function for AI analysis FIRST
-./scripts/build-lambda.sh
+#### **Step 1: Explain Log Storage Strategy**
+**Show the audience**: "After running our incident demo, we have logs in TWO places:"
+- **Local storage**: `/tmp` directory (for immediate analysis)
+- **Cloud storage**: S3 bucket (for remote analysis and backup)
+
+**Visual explanation**:
 ```
-**Explain**: "This packages our Python Lambda function with AWS Bedrock integration. We MUST do this BEFORE running Terraform, because Terraform needs the ZIP file to create the Lambda function."
-
-#### **Step 2: Deploy AI Infrastructure**
-```bash
-# Deploy S3, Lambda, and IAM resources for AI analysis
-cd terraform
-terraform apply
-cd ..
+incident-demo.sh
+    ↓
+├── /tmp/incident-logs/     ← Local analysis
+└── S3://bucket/logs/       ← Remote analysis
 ```
-**Explain**: "This creates the S3 bucket for log storage, Lambda function for analysis, and IAM roles for Bedrock access. The Lambda function will use the ZIP file we created in Step 1."
 
-**Note**: If you already ran `terraform apply` earlier, you can skip this step. The AI infrastructure is included in the main Terraform configuration.
-
-#### **Step 3: Run Enhanced Incident Demo with AI Logging**
+#### **Step 2: Demonstrate Local AI Analysis**
 ```bash
-# Run the incident demo with automatic log capture
-./scripts/incident-demo.sh
+# Show the local analysis script
+./scripts/analyze-incident-bedrock.sh
 ```
-**Explain**: "This enhanced demo automatically captures logs during the incident and uploads them to S3 for AI analysis."
+**Explain**: "This script reads logs from `/tmp` and sends them directly to AWS Bedrock using Claude Sonnet 4 for analysis."
 
-**Show the enhanced demo features**:
-- **Automatic log capture** at each phase
-- **S3 upload** of incident data
-- **Incident ID generation** for tracking
-- **Real-time metrics collection**
+**Show the process**:
+1. **Read logs** from `/tmp/incident-logs/`
+2. **Format prompt** with incident context
+3. **Call AWS Bedrock** API with Claude Sonnet 4
+4. **Parse response** into structured analysis
+5. **Save results** to `bedrock-analysis/` directory
 
-#### **Step 4: Demonstrate AI Analysis**
+**Display results**: Show the structured analysis output with:
+- Incident summary and severity
+- Root cause analysis
+- Immediate fixes with priorities
+- Preventive measures and recommendations
+
+#### **Step 3: Demonstrate GitHub Workflow Analysis**
+**Explain**: "Now let's show the CI/CD approach using GitHub Actions."
+
+**Show the workflow**:
 ```bash
-# Analyze the incident using AWS Bedrock
-./scripts/analyze-incident.sh -i demo-incident-20241201-143022 -t memory_leak -r 30
+# Navigate to GitHub repository
+# Go to Actions tab
+# Show analyze-s3-logs.yml workflow
 ```
-**Explain**: "This triggers our Lambda function to analyze the incident logs using AWS Bedrock (Claude 3 Sonnet)."
+
+**Explain the workflow**:
+1. **Trigger**: Manual workflow with S3 object URL parameter
+2. **Runner**: Ubuntu with AWS CLI pre-installed
+3. **Process**: Download logs from S3, analyze with Bedrock
+4. **Output**: Results displayed in workflow console and artifacts
+
+**Show the input**: "We need to provide an S3 object URL like:"
+```
+https://sre-incident-demo-incident-logs-xxx.s3.eu-central-1.amazonaws.com/incidents/demo-incident-20241201-143022/incident-demo-incident-20241201-143022.log
+```
+
+#### **Step 4: Compare Both Methods**
+**Create a visual comparison**:
+
+| Method | Location | Use Case | Pros | Cons |
+|--------|----------|----------|------|------|
+| **Local Analysis** | `/tmp` logs | Immediate analysis | Fast, no network | Requires local setup |
+| **GitHub Workflow** | S3 logs | Remote/CI analysis | No local setup, shareable | Requires S3 URL, network |
 
 #### **Step 5: Show AI Analysis Results**
 **Display the comprehensive AI analysis output**:
@@ -599,21 +623,21 @@ cd ..
 **Incident Summary:**
 ```json
 {
-  "type": "Memory Leak",
-  "severity": "High",
-  "duration": "30 minutes",
-  "affected_services": ["sre-demo-app"]
+  "type": "Memory leak causing pod restart and HPA metrics failure",
+  "severity": "MEDIUM",
+  "duration": "Approximately 2 minutes",
+  "affected_services": ["sre-demo-app", "horizontal-pod-autoscaler"]
 }
 ```
 
 **Root Cause Analysis:**
 ```json
 {
-  "primary_cause": "Memory leak simulation enabled in application",
+  "primary_cause": "Memory leak simulation was enabled in the application",
   "contributing_factors": [
-    "No memory limits configured",
-    "Lack of monitoring alerts",
-    "No automatic scaling policies"
+    "HPA unable to retrieve CPU and memory metrics",
+    "Metrics server connectivity issues",
+    "Pod restart disrupted normal operation"
   ]
 }
 ```
@@ -622,30 +646,14 @@ cd ..
 ```json
 [
   {
-    "action": "Disable memory leak simulation",
-    "priority": "High",
-    "description": "Stop the memory leak immediately"
+    "priority": "HIGH",
+    "action": "Disabled memory leak simulation",
+    "description": "Stopped the root cause of memory consumption"
   },
   {
-    "action": "Restart affected pods",
-    "priority": "High", 
-    "description": "Clear accumulated memory"
-  }
-]
-```
-
-**Preventive Measures:**
-```json
-[
-  {
-    "measure": "Implement memory limits",
-    "implementation": "Add resource limits to deployment",
-    "timeline": "Immediate"
-  },
-  {
-    "measure": "Set up memory alerts",
-    "implementation": "Configure Prometheus alerts",
-    "timeline": "Within 24 hours"
+    "priority": "HIGH",
+    "action": "Restarted affected pods",
+    "description": "Cleared memory state and restored application"
   }
 ]
 ```
@@ -653,42 +661,30 @@ cd ..
 #### **Step 6: Explain AI Benefits**
 **Highlight the advantages of AI-powered analysis**:
 
-- **Faster Resolution**: "AI identifies root causes in seconds, not hours"
-- **Comprehensive Analysis**: "Covers all aspects - technical, process, and preventive"
-- **Actionable Insights**: "Specific recommendations with priorities and timelines"
-- **Learning**: "Historical analysis for continuous improvement"
+- **⚡ Faster Resolution**: "AI identifies root causes in seconds, not hours"
+- **🔍 Comprehensive Analysis**: "Covers technical, process, and preventive aspects"
+- **🎯 Actionable Insights**: "Specific recommendations with priorities and timelines"
+- **📚 Learning**: "Historical analysis for continuous improvement"
+- **🔄 Automation**: "Can be integrated into CI/CD pipelines"
 
-#### **Step 7: Show AI Architecture**
-```bash
-# Explain the AI system components
-echo "AI Incident Response Architecture:"
-echo "1. Incident Demo → Logs captured automatically"
-echo "2. Logs → S3 storage (encrypted)"
-echo "3. S3 → Lambda function (triggers analysis)"
-echo "4. Lambda → AWS Bedrock (Claude 3 Sonnet)"
-echo "5. Bedrock → Structured RCA report"
+#### **Step 7: Show Real-World Applications**
+**Explain practical use cases**:
+
+1. **Production Incidents**: "Use GitHub workflow for team collaboration"
+2. **Development Testing**: "Use local analysis for quick feedback"
+3. **Post-Incident Reviews**: "Generate structured reports automatically"
+4. **Knowledge Base**: "Build incident response playbooks from AI insights"
+
+#### **Step 8: Demonstrate Workflow Integration**
+**Show the complete picture**:
 ```
-**Explain**: "This is a production-ready AI incident response system that can be deployed in real environments."
-
-#### **Step 8: Demonstrate Manual Analysis (Optional)**
-```bash
-# Show how to analyze a specific incident manually
-./scripts/analyze-incident.sh -i memory-leak-001 -t memory_leak -r 60
-
-# Show different incident types
-./scripts/analyze-incident.sh -i cpu-stress-001 -t cpu_stress -r 45
+Incident Demo → Logs (local + S3) → AI Analysis → Actionable Insights
+     ↓              ↓                    ↓              ↓
+  Real-time      Dual storage       Claude Sonnet    Structured
+  simulation     for flexibility      4 analysis      recommendations
 ```
-**Explain**: "You can analyze different types of incidents and time ranges."
 
-#### **Step 9: Show AI Integration Benefits**
-**Display the complete workflow**:
-1. **Incident Detection** → Monitoring alerts
-2. **Log Capture** → Automatic S3 upload
-3. **AI Analysis** → Bedrock-powered RCA
-4. **Action Planning** → Immediate fixes and preventive measures
-5. **Documentation** → Lessons learned and recommendations
-
-**Explain**: "This transforms incident response from reactive to proactive with AI-powered insights."
+**Explain**: "This creates a complete incident response system that works both locally and in the cloud, perfect for SRE teams."
 
 ### 🧹 **Cleanup & Cost Management (3-4 minutes)**
 
@@ -899,7 +895,7 @@ curl -v http://$SERVICE_URL/health
 | Deployment | 3-4 min | Helm and Kubernetes |
 | Monitoring | 5-6 min | Prometheus, Grafana, and K8s Dashboard |
 | Demo | 6-8 min | Incident simulation |
-| AI Analysis | 4-5 min | AI-powered incident analysis |
+| AI Analysis | 4-5 min | AI-powered incident analysis using AWS Bedrock. After running incident-demo.sh (which pushes logs to /tmp and S3), demonstrate two analysis methods: 1) Local analysis with analyze-incident-bedrock.sh using logs from /tmp, or 2) GitHub workflow analyze-s3-logs.yml using Ubuntu runner with AWS CLI and S3 object URL parameter |
 | Cleanup | 3-4 min | Cost management |
 | Wrap-up | 2-3 min | Takeaways and next steps |
 
