@@ -94,6 +94,25 @@ jobs:
       run: |
         ./analyze-log.sh
         
+    - name: Display full Bedrock response
+      run: |
+        echo "=== FULL BEDROCK RESPONSE ==="
+        if [ -f "bedrock-response.json" ]; then
+          echo "📄 Bedrock Response File Contents:"
+          cat bedrock-response.json
+          echo ""
+          echo "📊 Response Summary:"
+          echo "File size: $(wc -c < bedrock-response.json) bytes"
+          echo "Response ID: $(jq -r '.id // "N/A"' bedrock-response.json 2>/dev/null || echo "N/A")"
+          echo "Model used: $(jq -r '.model // "N/A"' bedrock-response.json 2>/dev/null || echo "N/A")"
+          echo "Stop reason: $(jq -r '.stop_reason // "N/A"' bedrock-response.json 2>/dev/null || echo "N/A")"
+          echo "Input tokens: $(jq -r '.usage.input_tokens // "N/A"' bedrock-response.json 2>/dev/null || echo "N/A")"
+          echo "Output tokens: $(jq -r '.usage.output_tokens // "N/A"' bedrock-response.json 2>/dev/null || echo "N/A")"
+        else
+          echo "❌ bedrock-response.json not found"
+        fi
+        echo "=== END BEDROCK RESPONSE ==="
+        
     - name: Upload analysis results as artifacts
       uses: actions/upload-artifact@v4
       if: always()
