@@ -96,13 +96,20 @@ The memory leak is a **controlled simulation** within the application:
 4. **Structured Output**: Returns comprehensive analysis in JSON format
 
 ### Analysis Results Display
-The demo automatically displays AI analysis results including:
+The demo attempts to display AI analysis results automatically, but if the display fails, it provides clear guidance on how to view the results:
+
+**Automatic Display** (when working):
 - **Incident Summary**: Type, severity, duration, affected services
 - **Root Cause Analysis**: Primary cause and contributing factors
 - **Immediate Fixes**: Actions taken with priorities
 - **Preventive Measures**: Long-term improvements with timelines
 - **Lessons Learned**: Key takeaways from the incident
 - **Recommendations**: Actionable suggestions by category
+
+**Manual Viewing Options** (when automatic display fails):
+- Run `./scripts/test-analysis-display.sh` for formatted results
+- View raw JSON files in `bedrock-analysis/` directory
+- Use AI chatbot to summarize the JSON output in human-readable language
 
 ## File Locations
 

@@ -1,0 +1,196 @@
+You are an expert SRE (Site Reliability Engineer) analyzing a Kubernetes incident. Please analyze the following incident log data and provide a comprehensive incident analysis report.
+
+Please provide your analysis in the following JSON format:
+
+{
+  "analysis": {
+    "incident_summary": {
+      "type": "string describing the incident type",
+      "severity": "LOW|MEDIUM|HIGH|CRITICAL",
+      "duration": "estimated duration of the incident",
+      "affected_services": ["list of affected services"]
+    },
+    "root_cause_analysis": {
+      "primary_cause": "string describing the primary root cause",
+      "contributing_factors": ["list of contributing factors"]
+    },
+    "immediate_fixes": [
+      {
+        "priority": "HIGH|MEDIUM|LOW",
+        "action": "string describing the action taken",
+        "description": "string describing why this was done"
+      }
+    ],
+    "preventive_measures": [
+      {
+        "measure": "string describing the preventive measure",
+        "implementation": "string describing how to implement it",
+        "timeline": "IMMEDIATE|SHORT_TERM|LONG_TERM"
+      }
+    ],
+    "lessons_learned": ["list of lessons learned from this incident"],
+    "recommendations": [
+      {
+        "category": "MONITORING|ALERTING|PROCESS|INFRASTRUCTURE",
+        "recommendation": "string describing the recommendation",
+        "impact": "HIGH|MEDIUM|LOW"
+      }
+    ],
+    "analysis_type": "bedrock_analysis"
+  }
+}
+
+Focus on:
+1. Identifying the root cause from the logs
+2. Understanding the incident timeline
+3. Analyzing the resolution actions taken
+4. Providing actionable recommendations
+5. Suggesting preventive measures
+
+Be specific and actionable in your recommendations.
+
+INCIDENT LOG DATA:
+[2025-08-07T20:26:48Z] [INITIAL_STATE] Application logs captured
+=== POD LOGS ===\nSRE Demo App running on port 3000
+Failure mode: none
+SRE Demo App running on port 3000
+Failure mode: none
+SRE Demo App running on port 3000
+Failure mode: none
+SRE Demo App running on port 3000
+Failure mode: none
+SRE Demo App running on port 3000
+Failure mode: none\n\n=== POD STATUS ===\nNAME                            READY   STATUS    RESTARTS   AGE     IP           NODE                                          NOMINATED NODE   READINESS GATES
+sre-demo-app-7d897bbf76-6jkwg   1/1     Running   0          3m29s   10.0.2.14    ip-10-0-2-168.eu-central-1.compute.internal   <none>           <none>
+sre-demo-app-7d897bbf76-7gxk6   1/1     Running   0          3m52s   10.0.2.132   ip-10-0-2-168.eu-central-1.compute.internal   <none>           <none>
+sre-demo-app-7d897bbf76-cg4vq   1/1     Running   0          3m29s   10.0.1.165   ip-10-0-1-235.eu-central-1.compute.internal   <none>           <none>
+sre-demo-app-7d897bbf76-tr49k   1/1     Running   0          3m14s   10.0.2.143   ip-10-0-2-168.eu-central-1.compute.internal   <none>           <none>
+sre-demo-app-7d897bbf76-xpjx7   1/1     Running   0          3m29s   10.0.1.163   ip-10-0-1-235.eu-central-1.compute.internal   <none>           <none>\n\n=== RESOURCE USAGE ===\nNAME                            CPU(cores)   MEMORY(bytes)   
+sre-demo-app-7d897bbf76-6jkwg   1m           19Mi            
+sre-demo-app-7d897bbf76-7gxk6   1m           19Mi            
+sre-demo-app-7d897bbf76-cg4vq   1m           19Mi            
+sre-demo-app-7d897bbf76-tr49k   1m           19Mi            
+sre-demo-app-7d897bbf76-xpjx7   1m           19Mi            \n\n=== EVENTS ===\nLAST SEEN   TYPE      REASON                         OBJECT                                 MESSAGE
+60m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled down replica set sre-demo-app-644b7dc96b to 4 from 5
+58m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled down replica set sre-demo-app-644b7dc96b to 2 from 4
+58m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled down replica set sre-demo-app-644b7dc96b to 1 from 2
+55m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled up replica set sre-demo-app-5f7df58c96 to 1
+54m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled down replica set sre-demo-app-644b7dc96b to 0 from 1
+22m         Warning   FailedGetResourceMetric        horizontalpodautoscaler/sre-demo-app   failed to get memory utilization: unable to get metrics for resource memory: no metrics returned from resource metrics API
+22m         Warning   FailedComputeMetricsReplicas   horizontalpodautoscaler/sre-demo-app   invalid metrics (2 invalid out of 2), first error is: failed to get cpu resource metric value: failed to get cpu utilization: unable to get metrics for resource cpu: no metrics returned from resource metrics API
+22m         Warning   FailedGetResourceMetric        horizontalpodautoscaler/sre-demo-app   failed to get cpu utilization: unable to get metrics for resource cpu: no metrics returned from resource metrics API
+22m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled up replica set sre-demo-app-67988f744f to 1
+22m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled down replica set sre-demo-app-756bcbc7dd to 0 from 1
+21m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled up replica set sre-demo-app-67988f744f to 4 from 1
+21m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled up replica set sre-demo-app-67988f744f to 5 from 4
+17m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled down replica set sre-demo-app-67988f744f to 4 from 5
+16m         Normal    SuccessfulRescale              horizontalpodautoscaler/sre-demo-app   New size: 1; reason: Current number of replicas above Spec.MaxReplicas
+16m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled down replica set sre-demo-app-67988f744f to 1 from 4
+15m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled up replica set sre-demo-app-7b4cd67564 to 1
+15m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled down replica set sre-demo-app-67988f744f to 0 from 1
+11m         Warning   FailedGetResourceMetric        horizontalpodautoscaler/sre-demo-app   failed to get cpu utilization: did not receive metrics for targeted pods (pods might be unready)
+10m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled up replica set sre-demo-app-5c99b9d6bf to 1
+6m17s       Normal    SuccessfulRescale              horizontalpodautoscaler/sre-demo-app   New size: 4; reason: All metrics below target
+3m54s       Normal    ScalingReplicaSet              deployment/sre-demo-app                (combined from similar events): Scaled up replica set sre-demo-app-7d897bbf76 to 1
+
+[2025-08-07T20:26:49Z] [INITIAL_STATE] Metrics snapshot captured
+=== HEALTH STATUS ===\n{"status":"healthy","timestamp":"2025-08-07T20:26:49.466Z"}\n\n=== MEMORY STATUS ===\n{"memoryLeakEnabled":false,"arraysCount":0,"estimatedMemoryMB":0,"timestamp":"2025-08-07T20:26:49.534Z"}
+
+[2025-08-07T20:26:55Z] [INCIDENT_TRIGGER] Memory leak simulation enabled
+Memory leak simulation activated via API call
+
+[2025-08-07T20:27:39Z] [DETECTION] Application logs captured
+=== POD LOGS ===\nSRE Demo App running on port 3000
+Failure mode: none\n\n=== POD STATUS ===\nNAME                            READY   STATUS    RESTARTS   AGE     IP           NODE                                          NOMINATED NODE   READINESS GATES
+sre-demo-app-7d897bbf76-cg4vq   1/1     Running   0          4m20s   10.0.1.165   ip-10-0-1-235.eu-central-1.compute.internal   <none>           <none>\n\n=== RESOURCE USAGE ===\nNAME                            CPU(cores)   MEMORY(bytes)   
+sre-demo-app-7d897bbf76-cg4vq   1m           19Mi            \n\n=== EVENTS ===\nLAST SEEN   TYPE      REASON                         OBJECT                                 MESSAGE
+60m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled down replica set sre-demo-app-644b7dc96b to 4 from 5
+59m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled down replica set sre-demo-app-644b7dc96b to 2 from 4
+59m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled down replica set sre-demo-app-644b7dc96b to 1 from 2
+55m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled up replica set sre-demo-app-5f7df58c96 to 1
+55m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled down replica set sre-demo-app-644b7dc96b to 0 from 1
+23m         Warning   FailedGetResourceMetric        horizontalpodautoscaler/sre-demo-app   failed to get memory utilization: unable to get metrics for resource memory: no metrics returned from resource metrics API
+23m         Warning   FailedComputeMetricsReplicas   horizontalpodautoscaler/sre-demo-app   invalid metrics (2 invalid out of 2), first error is: failed to get cpu resource metric value: failed to get cpu utilization: unable to get metrics for resource cpu: no metrics returned from resource metrics API
+23m         Warning   FailedGetResourceMetric        horizontalpodautoscaler/sre-demo-app   failed to get cpu utilization: unable to get metrics for resource cpu: no metrics returned from resource metrics API
+23m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled up replica set sre-demo-app-67988f744f to 1
+23m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled down replica set sre-demo-app-756bcbc7dd to 0 from 1
+22m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled up replica set sre-demo-app-67988f744f to 4 from 1
+22m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled up replica set sre-demo-app-67988f744f to 5 from 4
+18m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled down replica set sre-demo-app-67988f744f to 4 from 5
+17m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled down replica set sre-demo-app-67988f744f to 1 from 4
+16m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled up replica set sre-demo-app-7b4cd67564 to 1
+16m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled down replica set sre-demo-app-67988f744f to 0 from 1
+12m         Warning   FailedGetResourceMetric        horizontalpodautoscaler/sre-demo-app   failed to get cpu utilization: did not receive metrics for targeted pods (pods might be unready)
+11m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled up replica set sre-demo-app-5c99b9d6bf to 1
+7m8s        Normal    SuccessfulRescale              horizontalpodautoscaler/sre-demo-app   New size: 4; reason: All metrics below target
+37s         Normal    ScalingReplicaSet              deployment/sre-demo-app                (combined from similar events): Scaled down replica set sre-demo-app-7d897bbf76 to 1 from 5
+37s         Normal    SuccessfulRescale              horizontalpodautoscaler/sre-demo-app   New size: 1; reason: Current number of replicas above Spec.MaxReplicas
+
+[2025-08-07T20:27:40Z] [DETECTION] Metrics snapshot captured
+=== HEALTH STATUS ===\n{"status":"healthy","timestamp":"2025-08-07T20:27:40.250Z"}\n\n=== MEMORY STATUS ===\n{"memoryLeakEnabled":false,"arraysCount":0,"estimatedMemoryMB":0,"timestamp":"2025-08-07T20:27:40.326Z"}
+
+[2025-08-07T20:27:51Z] [DIAGNOSIS] Application logs captured
+=== POD LOGS ===\nSRE Demo App running on port 3000
+Failure mode: none\n\n=== POD STATUS ===\nNAME                            READY   STATUS    RESTARTS   AGE     IP           NODE                                          NOMINATED NODE   READINESS GATES
+sre-demo-app-7d897bbf76-cg4vq   1/1     Running   0          4m32s   10.0.1.165   ip-10-0-1-235.eu-central-1.compute.internal   <none>           <none>\n\n=== RESOURCE USAGE ===\nNAME                            CPU(cores)   MEMORY(bytes)   
+sre-demo-app-7d897bbf76-cg4vq   1m           19Mi            \n\n=== EVENTS ===\nLAST SEEN   TYPE      REASON                         OBJECT                                 MESSAGE
+59m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled down replica set sre-demo-app-644b7dc96b to 2 from 4
+59m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled down replica set sre-demo-app-644b7dc96b to 1 from 2
+56m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled up replica set sre-demo-app-5f7df58c96 to 1
+56m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled down replica set sre-demo-app-644b7dc96b to 0 from 1
+23m         Warning   FailedGetResourceMetric        horizontalpodautoscaler/sre-demo-app   failed to get memory utilization: unable to get metrics for resource memory: no metrics returned from resource metrics API
+23m         Warning   FailedComputeMetricsReplicas   horizontalpodautoscaler/sre-demo-app   invalid metrics (2 invalid out of 2), first error is: failed to get cpu resource metric value: failed to get cpu utilization: unable to get metrics for resource cpu: no metrics returned from resource metrics API
+23m         Warning   FailedGetResourceMetric        horizontalpodautoscaler/sre-demo-app   failed to get cpu utilization: unable to get metrics for resource cpu: no metrics returned from resource metrics API
+23m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled up replica set sre-demo-app-67988f744f to 1
+23m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled down replica set sre-demo-app-756bcbc7dd to 0 from 1
+22m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled up replica set sre-demo-app-67988f744f to 4 from 1
+22m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled up replica set sre-demo-app-67988f744f to 5 from 4
+18m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled down replica set sre-demo-app-67988f744f to 4 from 5
+17m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled down replica set sre-demo-app-67988f744f to 1 from 4
+16m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled up replica set sre-demo-app-7b4cd67564 to 1
+16m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled down replica set sre-demo-app-67988f744f to 0 from 1
+12m         Warning   FailedGetResourceMetric        horizontalpodautoscaler/sre-demo-app   failed to get cpu utilization: did not receive metrics for targeted pods (pods might be unready)
+11m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled up replica set sre-demo-app-5c99b9d6bf to 1
+7m19s       Normal    SuccessfulRescale              horizontalpodautoscaler/sre-demo-app   New size: 4; reason: All metrics below target
+48s         Normal    ScalingReplicaSet              deployment/sre-demo-app                (combined from similar events): Scaled down replica set sre-demo-app-7d897bbf76 to 1 from 5
+48s         Normal    SuccessfulRescale              horizontalpodautoscaler/sre-demo-app   New size: 1; reason: Current number of replicas above Spec.MaxReplicas
+
+[2025-08-07T20:27:51Z] [DIAGNOSIS] Root cause identified
+Memory leak simulation enabled in application
+
+[2025-08-07T20:28:08Z] [RESOLUTION] Memory leak disabled and pods restarted
+Resolution actions completed successfully
+
+[2025-08-07T20:28:20Z] [VERIFICATION] Application logs captured
+=== POD LOGS ===\nSRE Demo App running on port 3000
+Failure mode: none
+SRE Demo App running on port 3000
+Failure mode: none
+Memory leak simulation disabled - memory cleared\n\n=== POD STATUS ===\nNAME                            READY   STATUS        RESTARTS   AGE    IP           NODE                                          NOMINATED NODE   READINESS GATES
+sre-demo-app-5f976d5c85-fnpq6   1/1     Running       0          16s    10.0.2.132   ip-10-0-2-168.eu-central-1.compute.internal   <none>           <none>
+sre-demo-app-7d897bbf76-cg4vq   1/1     Terminating   0          5m1s   10.0.1.165   ip-10-0-1-235.eu-central-1.compute.internal   <none>           <none>\n\n=== RESOURCE USAGE ===\nNAME                            CPU(cores)   MEMORY(bytes)   
+sre-demo-app-5f976d5c85-fnpq6   32m          18Mi            
+sre-demo-app-7d897bbf76-cg4vq   2m           19Mi            \n\n=== EVENTS ===\nLAST SEEN   TYPE      REASON                         OBJECT                                 MESSAGE
+60m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled down replica set sre-demo-app-644b7dc96b to 2 from 4
+59m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled down replica set sre-demo-app-644b7dc96b to 1 from 2
+56m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled up replica set sre-demo-app-5f7df58c96 to 1
+56m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled down replica set sre-demo-app-644b7dc96b to 0 from 1
+24m         Warning   FailedGetResourceMetric        horizontalpodautoscaler/sre-demo-app   failed to get memory utilization: unable to get metrics for resource memory: no metrics returned from resource metrics API
+24m         Warning   FailedComputeMetricsReplicas   horizontalpodautoscaler/sre-demo-app   invalid metrics (2 invalid out of 2), first error is: failed to get cpu resource metric value: failed to get cpu utilization: unable to get metrics for resource cpu: no metrics returned from resource metrics API
+24m         Warning   FailedGetResourceMetric        horizontalpodautoscaler/sre-demo-app   failed to get cpu utilization: unable to get metrics for resource cpu: no metrics returned from resource metrics API
+23m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled up replica set sre-demo-app-67988f744f to 1
+23m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled down replica set sre-demo-app-756bcbc7dd to 0 from 1
+23m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled up replica set sre-demo-app-67988f744f to 4 from 1
+23m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled up replica set sre-demo-app-67988f744f to 5 from 4
+19m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled down replica set sre-demo-app-67988f744f to 4 from 5
+18m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled down replica set sre-demo-app-67988f744f to 1 from 4
+17m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled up replica set sre-demo-app-7b4cd67564 to 1
+17m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled down replica set sre-demo-app-67988f744f to 0 from 1
+13m         Warning   FailedGetResourceMetric        horizontalpodautoscaler/sre-demo-app   failed to get cpu utilization: did not receive metrics for targeted pods (pods might be unready)
+11m         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled up replica set sre-demo-app-5c99b9d6bf to 1
+7m48s       Normal    SuccessfulRescale              horizontalpodautoscaler/sre-demo-app   New size: 4; reason: All metrics below target
+77s         Normal    ScalingReplicaSet              deployment/sre-demo-app                (combined from similar events): Scaled down replica set sre-demo-app-7d897bbf76 to 1 from 5
+77s         Normal    SuccessfulRescale              horizontalpodautoscaler/sre-demo-app   New size: 1; reason: Current number of replicas above Spec.MaxReplicas
+
+[2025-08-07T20:28:21Z] [VERIFICATION] Metrics snapshot captured
+=== HEALTH STATUS ===\n{"status":"healthy","timestamp":"2025-08-07T20:28:20.746Z"}\n\n=== MEMORY STATUS ===\n{"memoryLeakEnabled":false,"arraysCount":0,"estimatedMemoryMB":0,"timestamp":"2025-08-07T20:28:20.817Z"}
