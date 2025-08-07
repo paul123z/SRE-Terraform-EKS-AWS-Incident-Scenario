@@ -426,11 +426,16 @@ demo_incident() {
         print_status "Running AI analysis with AWS Bedrock..."
         
         # Capture the output of the analysis
+        print_status "Starting AI analysis..."
         ANALYSIS_OUTPUT=$(./scripts/analyze-incident-bedrock.sh "$INCIDENT_ID" 2>&1)
         ANALYSIS_EXIT_CODE=$?
+        print_status "AI analysis completed with exit code: $ANALYSIS_EXIT_CODE"
         
         if [ $ANALYSIS_EXIT_CODE -eq 0 ]; then
             print_success "AI analysis completed successfully!"
+            
+            # Small delay to ensure file is written
+            sleep 2
             
             # Display the analysis results
             echo ""
@@ -438,37 +443,41 @@ demo_incident() {
             echo ""
             
             # Extract and display the structured analysis if available
-            ANALYSIS_FILE="bedrock-analysis/incident-analysis-$INCIDENT_ID.json"
-            if [ -f "$ANALYSIS_FILE" ]; then
+            # Find the most recent bedrock response file
+            print_status "Searching for analysis files..."
+            ls -la bedrock-analysis/bedrock_response_*.json 2>/dev/null || print_warning "No analysis files found"
+            ANALYSIS_FILE=$(ls -t bedrock-analysis/bedrock_response_*.json 2>/dev/null | head -1)
+            print_status "Found analysis file: $ANALYSIS_FILE"
+            if [ -n "$ANALYSIS_FILE" ] && [ -f "$ANALYSIS_FILE" ]; then
                 if command -v jq &> /dev/null; then
                 print_status "📊 INCIDENT SUMMARY:"
-                INCIDENT_TYPE=$(jq -r '.analysis.incident_summary.type' "$ANALYSIS_FILE" 2>/dev/null || echo "Unknown")
-                SEVERITY=$(jq -r '.analysis.incident_summary.severity' "$ANALYSIS_FILE" 2>/dev/null || echo "Unknown")
-                DURATION=$(jq -r '.analysis.incident_summary.duration' "$ANALYSIS_FILE" 2>/dev/null || echo "Unknown")
+                INCIDENT_TYPE=$(jq -r '.content[0].text' "$ANALYSIS_FILE" | sed 's/```json//' | sed 's/```//' | jq -r '.analysis.incident_summary.type' 2>/dev/null || echo "Unknown")
+                SEVERITY=$(jq -r '.content[0].text' "$ANALYSIS_FILE" | sed 's/```json//' | sed 's/```//' | jq -r '.analysis.incident_summary.severity' 2>/dev/null || echo "Unknown")
+                DURATION=$(jq -r '.content[0].text' "$ANALYSIS_FILE" | sed 's/```json//' | sed 's/```//' | jq -r '.analysis.incident_summary.duration' 2>/dev/null || echo "Unknown")
                 echo "  Type: $INCIDENT_TYPE"
                 echo "  Severity: $SEVERITY"
                 echo "  Duration: $DURATION"
                 echo ""
                 
                 print_status "🔍 ROOT CAUSE ANALYSIS:"
-                PRIMARY_CAUSE=$(jq -r '.analysis.root_cause_analysis.primary_cause' "$ANALYSIS_FILE" 2>/dev/null || echo "Unknown")
+                PRIMARY_CAUSE=$(jq -r '.content[0].text' "$ANALYSIS_FILE" | sed 's/```json//' | sed 's/```//' | jq -r '.analysis.root_cause_analysis.primary_cause' 2>/dev/null || echo "Unknown")
                 echo "  Primary Cause: $PRIMARY_CAUSE"
                 echo ""
                 
                 print_status "⚡ IMMEDIATE FIXES:"
-                jq -r '.analysis.immediate_fixes[] | "  \(.priority | ascii_upcase): \(.action) - \(.description)"' "$ANALYSIS_FILE" 2>/dev/null || echo "  No immediate fixes found"
+                jq -r '.content[0].text' "$ANALYSIS_FILE" | sed 's/```json//' | sed 's/```//' | jq -r '.analysis.immediate_fixes[] | "  \(.priority | ascii_upcase): \(.action) - \(.description)"' 2>/dev/null || echo "  No immediate fixes found"
                 echo ""
                 
                 print_status "🛡️ PREVENTIVE MEASURES:"
-                jq -r '.analysis.preventive_measures[] | "  \(.measure): \(.implementation) (Timeline: \(.timeline))"' "$ANALYSIS_FILE" 2>/dev/null || echo "  No preventive measures found"
+                jq -r '.content[0].text' "$ANALYSIS_FILE" | sed 's/```json//' | sed 's/```//' | jq -r '.analysis.preventive_measures[] | "  \(.measure): \(.implementation) (Timeline: \(.timeline))"' 2>/dev/null || echo "  No preventive measures found"
                 echo ""
                 
                 print_status "📚 LESSONS LEARNED:"
-                jq -r '.analysis.lessons_learned[] | "  • \(.)"' "$ANALYSIS_FILE" 2>/dev/null || echo "  No lessons learned found"
+                jq -r '.content[0].text' "$ANALYSIS_FILE" | sed 's/```json//' | sed 's/```//' | jq -r '.analysis.lessons_learned[] | "  • \(.)"' 2>/dev/null || echo "  No lessons learned found"
                 echo ""
                 
                 print_status "💡 RECOMMENDATIONS:"
-                jq -r '.analysis.recommendations[] | "  \(.category | ascii_upcase): \(.recommendation) (Impact: \(.impact))"' "$ANALYSIS_FILE" 2>/dev/null || echo "  No recommendations found"
+                jq -r '.content[0].text' "$ANALYSIS_FILE" | sed 's/```json//' | sed 's/```//' | jq -r '.analysis.recommendations[] | "  \(.category | ascii_upcase): \(.recommendation) (Impact: \(.impact))"' 2>/dev/null || echo "  No recommendations found"
                 echo ""
                 
                     print_success "✅ AI analysis results displayed above!"
@@ -528,6 +537,11 @@ demo_incident() {
     print_status "This saves hours of manual analysis and helps SREs respond faster!"
     print_status "The analysis works offline using only the incident log files."
     echo ""
+    
+    # Final pause to ensure results are displayed
+    echo ""
+    print_success "🎉 Demo completed! Press Enter to exit..."
+    read -p ""
 }
 
 # Check prerequisites

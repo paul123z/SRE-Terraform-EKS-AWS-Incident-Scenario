@@ -9,9 +9,9 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 # Initialize AWS clients
-s3_client = boto3.client('s3')
-# Use us-west-1 for Bedrock as it's available there
-bedrock_client = boto3.client('bedrock-runtime', region_name='us-west-1')
+s3_client = boto3.client('s3', region_name='eu-central-1')  # S3 in Frankfurt
+# Use us-east-1 for Bedrock as it's available in N. Carolina
+bedrock_client = boto3.client('bedrock-runtime', region_name='us-east-1')
 
 def get_logs_from_s3(bucket_name, incident_id, time_range_minutes=30):
     """
@@ -50,112 +50,173 @@ def get_logs_from_s3(bucket_name, incident_id, time_range_minutes=30):
 def analyze_with_bedrock(logs_content, incident_type="memory_leak"):
     """
     Use AWS Bedrock to analyze the logs and generate RCA
+    Now uses the working AWS CLI method instead of boto3
     """
     try:
-        # Prepare the prompt for Bedrock
-        prompt = f"""
-You are an expert SRE (Site Reliability Engineer) performing Root Cause Analysis (RCA) on a production incident.
+        logger.info("Using AWS CLI method for Bedrock (proven to work)")
+        return analyze_with_bedrock_cli(logs_content, incident_type)
+    
+    except Exception as e:
+        logger.error(f"AWS CLI Bedrock method failed: {str(e)}")
+        # Fallback to basic analysis
+        return generate_fallback_analysis(logs_content, incident_type, str(e))
 
-INCIDENT TYPE: {incident_type.upper()}
+def analyze_with_bedrock_cli(logs_content, incident_type="memory_leak"):
+    """
+    Use AWS CLI to call Bedrock (works when boto3 fails) - using the working format from analyze-incident-bedrock.sh
+    """
+    try:
+        import subprocess
+        import tempfile
+        import os
+        
+        logger.info("Attempting Bedrock analysis via AWS CLI (working method)")
+        
+        # Create temporary files
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_payload:
+            payload_file = temp_payload.name
+            
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_response:
+            response_file = temp_response.name
+            
+        # Create the analysis prompt (using the exact format from your working script)
+        analysis_prompt = f"""You are an expert SRE (Site Reliability Engineer) analyzing a Kubernetes incident. Please analyze the following incident log data and provide a comprehensive incident analysis report.
 
-LOGS TO ANALYZE:
-{logs_content}
-
-Please provide a comprehensive RCA analysis in the following JSON format:
+Please provide your analysis in the following JSON format:
 
 {{
+  "analysis": {{
     "incident_summary": {{
-        "type": "string",
-        "severity": "high|medium|low",
-        "duration": "string",
-        "affected_services": ["array of service names"]
+      "type": "string describing the incident type",
+      "severity": "LOW|MEDIUM|HIGH|CRITICAL",
+      "duration": "estimated duration of the incident",
+      "affected_services": ["list of affected services"]
     }},
     "root_cause_analysis": {{
-        "primary_cause": "string",
-        "contributing_factors": ["array of contributing factors"],
-        "timeline": {{
-            "detection_time": "string",
-            "escalation_time": "string",
-            "resolution_time": "string"
-        }}
+      "primary_cause": "string describing the primary root cause",
+      "contributing_factors": ["list of contributing factors"]
     }},
     "immediate_fixes": [
-        {{
-            "action": "string",
-            "priority": "high|medium|low",
-            "description": "string"
-        }}
+      {{
+        "priority": "HIGH|MEDIUM|LOW",
+        "action": "string describing the action taken",
+        "description": "string describing why this was done"
+      }}
     ],
     "preventive_measures": [
-        {{
-            "measure": "string",
-            "implementation": "string",
-            "timeline": "string"
-        }}
+      {{
+        "measure": "string describing the preventive measure",
+        "implementation": "string describing how to implement it",
+        "timeline": "IMMEDIATE|SHORT_TERM|LONG_TERM"
+      }}
     ],
-    "lessons_learned": [
-        "array of lessons learned"
-    ],
+    "lessons_learned": ["list of lessons learned from this incident"],
     "recommendations": [
-        {{
-            "category": "monitoring|infrastructure|process|code",
-            "recommendation": "string",
-            "impact": "high|medium|low"
-        }}
-    ]
+      {{
+        "category": "MONITORING|ALERTING|PROCESS|INFRASTRUCTURE",
+        "recommendation": "string describing the recommendation",
+        "impact": "HIGH|MEDIUM|LOW"
+      }}
+    ],
+    "analysis_type": "bedrock_analysis"
+  }}
 }}
 
 Focus on:
-1. What caused the issue most likely
-2. How to fix it immediately
-3. How to prevent it in the future
-4. Specific actionable recommendations
+1. Identifying the root cause from the logs
+2. Understanding the incident timeline
+3. Analyzing the resolution actions taken
+4. Providing actionable recommendations
+5. Suggesting preventive measures
 
-Be concise but thorough. If logs are insufficient, note what additional information would be needed.
-"""
+Be specific and actionable in your recommendations.
 
-        # Call Bedrock
-        response = bedrock_client.invoke_model(
-            modelId='anthropic.claude-3-sonnet-20240229-v1:0',
-            body=json.dumps({
-                "anthropic_version": "bedrock-2023-05-31",
-                "max_tokens": 4000,
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": prompt
+INCIDENT LOG DATA:
+{logs_content[:8000]}  # Limit log size for CLI"""
+
+        # Create the Bedrock request payload (exact format from your working script)
+        payload_content = f"""{{
+  "anthropic_version": "bedrock-2023-05-31",
+  "messages": [
+    {{
+      "role": "user",
+      "content": {json.dumps(analysis_prompt)}
+    }}
+  ],
+  "temperature": 0.3,
+  "max_tokens": 2000
+}}"""
+        
+        # Write payload to temporary file
+        with open(payload_file, 'w') as f:
+            f.write(payload_content)
+        
+        # Execute AWS CLI command (exact format from your working script)
+        cmd = [
+            'aws', 'bedrock-runtime', 'invoke-model',
+            '--region', 'us-east-1',
+            '--cli-binary-format', 'raw-in-base64-out',
+            '--model-id', 'us.anthropic.claude-sonnet-4-20250514-v1:0',
+            '--content-type', 'application/json',
+            '--accept', 'application/json',
+            '--body', f'file://{payload_file}',
+            response_file
+        ]
+        
+        logger.info(f"Executing AWS CLI command: {' '.join(cmd)}")
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        
+        if result.returncode == 0:
+            # Read and parse the response
+            with open(response_file, 'r') as f:
+                response_content = f.read()
+            
+            logger.info("AWS CLI Bedrock call successful")
+            
+            # Parse the response
+            response_data = json.loads(response_content)
+            
+            # Extract the text content from the response (same as your working script)
+            if 'content' in response_data and len(response_data['content']) > 0:
+                analysis_text = response_data['content'][0].get('text', '')
+                
+                # Try to parse as JSON, fallback to text if needed
+                try:
+                    analysis = json.loads(analysis_text)
+                    analysis['bedrock_status'] = 'Success via AWS CLI'
+                    analysis['analysis_type'] = 'bedrock_cli'
+                    return analysis
+                except json.JSONDecodeError:
+                    # If not valid JSON, return as text
+                    return {
+                        "analysis_text": analysis_text,
+                        "bedrock_status": "Success via AWS CLI (non-JSON response)",
+                        "analysis_type": "bedrock_cli_text"
                     }
-                ]
-            })
-        )
-        
-        # Parse response
-        response_body = json.loads(response['body'].read())
-        analysis = response_body['content'][0]['text']
-        
-        # Try to extract JSON from the response
-        try:
-            # Find JSON in the response
-            start_idx = analysis.find('{')
-            end_idx = analysis.rfind('}') + 1
-            if start_idx != -1 and end_idx != 0:
-                json_str = analysis[start_idx:end_idx]
-                return json.loads(json_str)
             else:
                 return {
-                    "error": "Could not parse JSON from Bedrock response",
-                    "raw_response": analysis
+                    "error": "No content in Bedrock response",
+                    "raw_response": response_data,
+                    "bedrock_status": "Success via AWS CLI but no content",
+                    "analysis_type": "bedrock_cli"
                 }
-        except json.JSONDecodeError:
-            return {
-                "error": "Invalid JSON in Bedrock response",
-                "raw_response": analysis
-            }
-    
+        else:
+            logger.error(f"AWS CLI failed: {result.stderr}")
+            raise Exception(f"AWS CLI failed: {result.stderr}")
+            
     except Exception as e:
-        logger.error(f"Error calling Bedrock: {str(e)}")
-        # Fallback to basic analysis when Bedrock is not available
-        return generate_fallback_analysis(logs_content, incident_type, str(e))
+        logger.error(f"Error in AWS CLI fallback: {str(e)}")
+        raise e
+    finally:
+        # Clean up temporary files
+        try:
+            if 'payload_file' in locals():
+                os.unlink(payload_file)
+            if 'response_file' in locals():
+                os.unlink(response_file)
+        except:
+            pass
 
 def generate_fallback_analysis(logs_content, incident_type="memory_leak", error_message=""):
     """

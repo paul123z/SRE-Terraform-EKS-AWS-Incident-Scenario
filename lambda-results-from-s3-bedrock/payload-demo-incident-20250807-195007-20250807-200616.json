@@ -1,0 +1,5 @@
+{
+    "incident_id": "demo-incident-20250807-195007",
+    "incident_type": "memory_leak",
+    "time_range_minutes": 30
+}
