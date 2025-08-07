@@ -1,0 +1,5 @@
+[0;34m[INFO][0m Invoking Lambda function...
+[0;34m[INFO][0m Function: sre-incident-demo-incident-analyzer
+[0;34m[INFO][0m Region: eu-central-1
+[0;34m[INFO][0m Incident ID: demo-incident-20250807-222634
+[0;31m[ERROR][0m Lambda function invocation failed

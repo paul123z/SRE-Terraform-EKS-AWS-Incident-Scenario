@@ -1,0 +1,118 @@
+You are an expert SRE (Site Reliability Engineer) analyzing a Kubernetes incident. Please analyze the following incident log data and provide a comprehensive incident analysis report.
+
+Please provide your analysis in the following JSON format:
+
+{
+  "analysis": {
+    "incident_summary": {
+      "type": "string describing the incident type",
+      "severity": "LOW|MEDIUM|HIGH|CRITICAL",
+      "duration": "estimated duration of the incident",
+      "affected_services": ["list of affected services"]
+    },
+    "root_cause_analysis": {
+      "primary_cause": "string describing the primary root cause",
+      "contributing_factors": ["list of contributing factors"]
+    },
+    "immediate_fixes": [
+      {
+        "priority": "HIGH|MEDIUM|LOW",
+        "action": "string describing the action taken",
+        "description": "string describing why this was done"
+      }
+    ],
+    "preventive_measures": [
+      {
+        "measure": "string describing the preventive measure",
+        "implementation": "string describing how to implement it",
+        "timeline": "IMMEDIATE|SHORT_TERM|LONG_TERM"
+      }
+    ],
+    "lessons_learned": ["list of lessons learned from this incident"],
+    "recommendations": [
+      {
+        "category": "MONITORING|ALERTING|PROCESS|INFRASTRUCTURE",
+        "recommendation": "string describing the recommendation",
+        "impact": "HIGH|MEDIUM|LOW"
+      }
+    ],
+    "analysis_type": "bedrock_analysis"
+  }
+}
+
+Focus on:
+1. Identifying the root cause from the logs
+2. Understanding the incident timeline
+3. Analyzing the resolution actions taken
+4. Providing actionable recommendations
+5. Suggesting preventive measures
+
+Be specific and actionable in your recommendations.
+
+INCIDENT LOG DATA:
+[2025-08-07T21:24:51Z] [INITIAL_STATE] Application logs captured
+=== POD LOGS ===\nSRE Demo App running on port 3000
+Failure mode: none\n\n=== POD STATUS ===\nNAME                            READY   STATUS    RESTARTS   AGE   IP           NODE                                          NOMINATED NODE   READINESS GATES
+sre-demo-app-5f976d5c85-fnpq6   1/1     Running   0          56m   10.0.2.132   ip-10-0-2-168.eu-central-1.compute.internal   <none>           <none>\n\n=== RESOURCE USAGE ===\nNAME                            CPU(cores)   MEMORY(bytes)   
+sre-demo-app-5f976d5c85-fnpq6   1m           26Mi            \n\n=== EVENTS ===\nLAST SEEN   TYPE     REASON              OBJECT                                 MESSAGE
+57m         Normal   SuccessfulRescale   horizontalpodautoscaler/sre-demo-app   New size: 1; reason: Current number of replicas above Spec.MaxReplicas
+57m         Normal   ScalingReplicaSet   deployment/sre-demo-app                (combined from similar events): Scaled down replica set sre-demo-app-7d897bbf76 to 1 from 5
+
+[2025-08-07T21:24:52Z] [INITIAL_STATE] Metrics snapshot captured
+=== HEALTH STATUS ===\n{"status":"healthy","timestamp":"2025-08-07T21:24:52.367Z"}\n\n=== MEMORY STATUS ===\n{"memoryLeakEnabled":false,"arraysCount":0,"estimatedMemoryMB":0,"timestamp":"2025-08-07T21:24:52.441Z"}
+
+[2025-08-07T21:24:55Z] [INCIDENT_TRIGGER] Memory leak simulation enabled
+Memory leak simulation activated via API call
+
+[2025-08-07T21:26:11Z] [DETECTION] Application logs captured
+=== POD LOGS ===\nSRE Demo App running on port 3000
+Failure mode: none\n\n=== POD STATUS ===\nNAME                            READY   STATUS    RESTARTS      AGE   IP           NODE                                          NOMINATED NODE   READINESS GATES
+sre-demo-app-5f976d5c85-fnpq6   1/1     Running   1 (40s ago)   58m   10.0.2.132   ip-10-0-2-168.eu-central-1.compute.internal   <none>           <none>\n\n=== RESOURCE USAGE ===\nNAME                            CPU(cores)   MEMORY(bytes)   
+sre-demo-app-5f976d5c85-fnpq6   25m          18Mi            \n\n=== EVENTS ===\nLAST SEEN   TYPE      REASON                         OBJECT                                 MESSAGE
+59m         Normal    SuccessfulRescale              horizontalpodautoscaler/sre-demo-app   New size: 1; reason: Current number of replicas above Spec.MaxReplicas
+59m         Normal    ScalingReplicaSet              deployment/sre-demo-app                (combined from similar events): Scaled down replica set sre-demo-app-7d897bbf76 to 1 from 5
+33s         Warning   FailedGetResourceMetric        horizontalpodautoscaler/sre-demo-app   failed to get cpu utilization: unable to get metrics for resource cpu: no metrics returned from resource metrics API
+33s         Warning   FailedGetResourceMetric        horizontalpodautoscaler/sre-demo-app   failed to get memory utilization: unable to get metrics for resource memory: no metrics returned from resource metrics API
+33s         Warning   FailedComputeMetricsReplicas   horizontalpodautoscaler/sre-demo-app   invalid metrics (2 invalid out of 2), first error is: failed to get cpu resource metric value: failed to get cpu utilization: unable to get metrics for resource cpu: no metrics returned from resource metrics API
+
+[2025-08-07T21:26:12Z] [DETECTION] Metrics snapshot captured
+=== HEALTH STATUS ===\n{"status":"healthy","timestamp":"2025-08-07T21:26:12.136Z"}\n\n=== MEMORY STATUS ===\n{"memoryLeakEnabled":false,"arraysCount":0,"estimatedMemoryMB":0,"timestamp":"2025-08-07T21:26:12.206Z"}
+
+[2025-08-07T21:26:17Z] [DIAGNOSIS] Application logs captured
+=== POD LOGS ===\nSRE Demo App running on port 3000
+Failure mode: none\n\n=== POD STATUS ===\nNAME                            READY   STATUS    RESTARTS      AGE   IP           NODE                                          NOMINATED NODE   READINESS GATES
+sre-demo-app-5f976d5c85-fnpq6   1/1     Running   1 (46s ago)   58m   10.0.2.132   ip-10-0-2-168.eu-central-1.compute.internal   <none>           <none>\n\n=== RESOURCE USAGE ===\nNAME                            CPU(cores)   MEMORY(bytes)   
+sre-demo-app-5f976d5c85-fnpq6   1m           18Mi            \n\n=== EVENTS ===\nLAST SEEN   TYPE      REASON                         OBJECT                                 MESSAGE
+59m         Normal    SuccessfulRescale              horizontalpodautoscaler/sre-demo-app   New size: 1; reason: Current number of replicas above Spec.MaxReplicas
+59m         Normal    ScalingReplicaSet              deployment/sre-demo-app                (combined from similar events): Scaled down replica set sre-demo-app-7d897bbf76 to 1 from 5
+39s         Warning   FailedGetResourceMetric        horizontalpodautoscaler/sre-demo-app   failed to get cpu utilization: unable to get metrics for resource cpu: no metrics returned from resource metrics API
+39s         Warning   FailedGetResourceMetric        horizontalpodautoscaler/sre-demo-app   failed to get memory utilization: unable to get metrics for resource memory: no metrics returned from resource metrics API
+39s         Warning   FailedComputeMetricsReplicas   horizontalpodautoscaler/sre-demo-app   invalid metrics (2 invalid out of 2), first error is: failed to get cpu resource metric value: failed to get cpu utilization: unable to get metrics for resource cpu: no metrics returned from resource metrics API
+
+[2025-08-07T21:26:17Z] [DIAGNOSIS] Root cause identified
+Memory leak simulation enabled in application
+
+[2025-08-07T21:26:30Z] [RESOLUTION] Memory leak disabled and pods restarted
+Resolution actions completed successfully
+
+[2025-08-07T21:26:40Z] [VERIFICATION] Application logs captured
+=== POD LOGS ===\nSRE Demo App running on port 3000
+Failure mode: none
+Memory leak simulation disabled - memory cleared
+SRE Demo App running on port 3000
+Failure mode: none\n\n=== POD STATUS ===\nNAME                            READY   STATUS        RESTARTS      AGE   IP           NODE                                          NOMINATED NODE   READINESS GATES
+sre-demo-app-5f976d5c85-fnpq6   1/1     Terminating   1 (69s ago)   58m   10.0.2.132   ip-10-0-2-168.eu-central-1.compute.internal   <none>           <none>
+sre-demo-app-65d98c8864-ps7wp   1/1     Running       0             19s   10.0.2.14    ip-10-0-2-168.eu-central-1.compute.internal   <none>           <none>\n\n=== RESOURCE USAGE ===\nNAME                            CPU(cores)   MEMORY(bytes)   
+sre-demo-app-5f976d5c85-fnpq6   2m           19Mi            
+sre-demo-app-65d98c8864-ps7wp   31m          18Mi            \n\n=== EVENTS ===\nLAST SEEN   TYPE      REASON                         OBJECT                                 MESSAGE
+59m         Normal    SuccessfulRescale              horizontalpodautoscaler/sre-demo-app   New size: 1; reason: Current number of replicas above Spec.MaxReplicas
+59m         Normal    ScalingReplicaSet              deployment/sre-demo-app                (combined from similar events): Scaled down replica set sre-demo-app-7d897bbf76 to 1 from 5
+62s         Warning   FailedGetResourceMetric        horizontalpodautoscaler/sre-demo-app   failed to get cpu utilization: unable to get metrics for resource cpu: no metrics returned from resource metrics API
+62s         Warning   FailedGetResourceMetric        horizontalpodautoscaler/sre-demo-app   failed to get memory utilization: unable to get metrics for resource memory: no metrics returned from resource metrics API
+62s         Warning   FailedComputeMetricsReplicas   horizontalpodautoscaler/sre-demo-app   invalid metrics (2 invalid out of 2), first error is: failed to get cpu resource metric value: failed to get cpu utilization: unable to get metrics for resource cpu: no metrics returned from resource metrics API
+21s         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled up replica set sre-demo-app-65d98c8864 to 1
+11s         Normal    ScalingReplicaSet              deployment/sre-demo-app                Scaled down replica set sre-demo-app-5f976d5c85 to 0 from 1
+2s          Warning   FailedGetResourceMetric        horizontalpodautoscaler/sre-demo-app   failed to get cpu utilization: did not receive metrics for targeted pods (pods might be unready)
+
+[2025-08-07T21:26:41Z] [VERIFICATION] Metrics snapshot captured
+=== HEALTH STATUS ===\n{"status":"healthy","timestamp":"2025-08-07T21:26:41.090Z"}\n\n=== MEMORY STATUS ===\n{"memoryLeakEnabled":false,"arraysCount":0,"estimatedMemoryMB":0,"timestamp":"2025-08-07T21:26:41.160Z"}

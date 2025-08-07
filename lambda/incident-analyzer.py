@@ -63,23 +63,12 @@ def analyze_with_bedrock(logs_content, incident_type="memory_leak"):
 
 def analyze_with_bedrock_cli(logs_content, incident_type="memory_leak"):
     """
-    Use AWS CLI to call Bedrock (works when boto3 fails) - using the working format from analyze-incident-bedrock.sh
+    Use boto3 to call Bedrock directly (AWS CLI not available in Lambda environment)
     """
     try:
-        import subprocess
-        import tempfile
-        import os
+        logger.info("Using boto3 method for Bedrock (AWS CLI not available in Lambda)")
         
-        logger.info("Attempting Bedrock analysis via AWS CLI (working method)")
-        
-        # Create temporary files
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_payload:
-            payload_file = temp_payload.name
-            
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_response:
-            response_file = temp_response.name
-            
-        # Create the analysis prompt (using the exact format from your working script)
+        # Create the analysis prompt
         analysis_prompt = f"""You are an expert SRE (Site Reliability Engineer) analyzing a Kubernetes incident. Please analyze the following incident log data and provide a comprehensive incident analysis report.
 
 Please provide your analysis in the following JSON format:
@@ -132,91 +121,67 @@ Focus on:
 Be specific and actionable in your recommendations.
 
 INCIDENT LOG DATA:
-{logs_content[:8000]}  # Limit log size for CLI"""
+{logs_content[:8000]}  # Limit log size for Lambda"""
 
-        # Create the Bedrock request payload (exact format from your working script)
-        payload_content = f"""{{
-  "anthropic_version": "bedrock-2023-05-31",
-  "messages": [
-    {{
-      "role": "user",
-      "content": {json.dumps(analysis_prompt)}
-    }}
-  ],
-  "temperature": 0.3,
-  "max_tokens": 2000
-}}"""
+        # Create the Bedrock request payload
+        payload = {
+            "anthropic_version": "bedrock-2023-05-31",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": analysis_prompt
+                }
+            ],
+            "temperature": 0.3,
+            "max_tokens": 2000
+        }
         
-        # Write payload to temporary file
-        with open(payload_file, 'w') as f:
-            f.write(payload_content)
+        logger.info("Invoking Bedrock with boto3...")
         
-        # Execute AWS CLI command (exact format from your working script)
-        cmd = [
-            'aws', 'bedrock-runtime', 'invoke-model',
-            '--region', 'us-east-1',
-            '--cli-binary-format', 'raw-in-base64-out',
-            '--model-id', 'us.anthropic.claude-sonnet-4-20250514-v1:0',
-            '--content-type', 'application/json',
-            '--accept', 'application/json',
-            '--body', f'file://{payload_file}',
-            response_file
-        ]
+        # Call Bedrock using boto3
+        response = bedrock_client.invoke_model(
+            modelId='us.anthropic.claude-sonnet-4-20250514-v1:0',
+            body=json.dumps(payload)
+        )
         
-        logger.info(f"Executing AWS CLI command: {' '.join(cmd)}")
+        logger.info("Bedrock response received")
         
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        # Parse response
+        response_body = json.loads(response['body'].read())
         
-        if result.returncode == 0:
-            # Read and parse the response
-            with open(response_file, 'r') as f:
-                response_content = f.read()
+        # Extract the text content from the response
+        if 'content' in response_body and len(response_body['content']) > 0:
+            analysis_text = response_body['content'][0].get('text', '')
             
-            logger.info("AWS CLI Bedrock call successful")
-            
-            # Parse the response
-            response_data = json.loads(response_content)
-            
-            # Extract the text content from the response (same as your working script)
-            if 'content' in response_data and len(response_data['content']) > 0:
-                analysis_text = response_data['content'][0].get('text', '')
-                
-                # Try to parse as JSON, fallback to text if needed
-                try:
-                    analysis = json.loads(analysis_text)
-                    analysis['bedrock_status'] = 'Success via AWS CLI'
-                    analysis['analysis_type'] = 'bedrock_cli'
-                    return analysis
-                except json.JSONDecodeError:
-                    # If not valid JSON, return as text
+            # Try to extract JSON from the response
+            try:
+                # Find JSON in the response
+                start_idx = analysis_text.find('{')
+                end_idx = analysis_text.rfind('}') + 1
+                if start_idx != -1 and end_idx != 0:
+                    json_str = analysis_text[start_idx:end_idx]
+                    return json.loads(json_str)
+                else:
                     return {
-                        "analysis_text": analysis_text,
-                        "bedrock_status": "Success via AWS CLI (non-JSON response)",
-                        "analysis_type": "bedrock_cli_text"
+                        "error": "Could not parse JSON from Bedrock response",
+                        "raw_response": analysis_text
                     }
-            else:
+            except json.JSONDecodeError:
                 return {
-                    "error": "No content in Bedrock response",
-                    "raw_response": response_data,
-                    "bedrock_status": "Success via AWS CLI but no content",
-                    "analysis_type": "bedrock_cli"
+                    "error": "Invalid JSON in Bedrock response",
+                    "raw_response": analysis_text
                 }
         else:
-            logger.error(f"AWS CLI failed: {result.stderr}")
-            raise Exception(f"AWS CLI failed: {result.stderr}")
+            return {
+                "error": "No content found in Bedrock response",
+                "raw_response": response_body
+            }
             
     except Exception as e:
-        logger.error(f"Error in AWS CLI fallback: {str(e)}")
-        raise e
-    finally:
-        # Clean up temporary files
-        try:
-            if 'payload_file' in locals():
-                os.unlink(payload_file)
-            if 'response_file' in locals():
-                os.unlink(response_file)
-        except:
-            pass
+        logger.error(f"Exception in boto3 method: {str(e)}")
+        return {
+            "error": f"Exception in boto3 method: {str(e)}"
+        }
 
 def generate_fallback_analysis(logs_content, incident_type="memory_leak", error_message=""):
     """
@@ -303,7 +268,10 @@ def handler(event, context):
         # Parse event
         incident_id = event.get('incident_id', 'demo-incident')
         incident_type = event.get('incident_type', 'memory_leak')
-        time_range_minutes = event.get('time_range_minutes', 30)
+        time_range_minutes = int(event.get('time_range_minutes', 30))
+        
+        logger.info(f"Event received: {event}")
+        logger.info(f"Parsed parameters - incident_id: {incident_id}, incident_type: {incident_type}, time_range_minutes: {time_range_minutes}")
         
         logger.info(f"Starting analysis for incident: {incident_id}")
         
@@ -314,16 +282,14 @@ def handler(event, context):
             logger.warning("No logs found or error retrieving logs")
             logs_content = "No logs available for analysis. This might be a demo incident."
         
-        # Analyze with Bedrock
-        analysis_result = analyze_with_bedrock(logs_content, incident_type)
-        
-        # Add metadata
+        # Return logs for local analysis (Bedrock analysis will be done locally)
         result = {
             "incident_id": incident_id,
             "analysis_timestamp": datetime.utcnow().isoformat(),
             "time_range_minutes": time_range_minutes,
-            "bedrock_model": bedrock_model,
-            "analysis": analysis_result
+            "logs_content": logs_content,
+            "logs_size": len(logs_content),
+            "status": "logs_retrieved"
         }
         
         logger.info(f"Analysis completed for incident: {incident_id}")

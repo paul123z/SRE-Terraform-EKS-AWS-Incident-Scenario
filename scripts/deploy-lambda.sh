@@ -35,6 +35,9 @@ UPDATING LAMBDA FUNCTION
 
 print_status "Updating Lambda function with latest code..."
 
+# Set AWS CLI to not use pager
+export AWS_PAGER=""
+
 # Check if ZIP file exists
 if [ ! -f "lambda/incident-analyzer.zip" ]; then
     print_error "ZIP file not found. Run ./scripts/build-lambda.sh first"
@@ -45,7 +48,8 @@ fi
 if /usr/local/aws-cli/v2/current/bin/aws lambda update-function-code \
     --function-name sre-incident-demo-incident-analyzer \
     --zip-file fileb://lambda/incident-analyzer.zip \
-    --region eu-central-1; then
+    --region eu-central-1 \
+    --output text; then
     
     print_success "Lambda function updated successfully!"
     print_status "You can now test with: ./scripts/debug-lambda.sh"
