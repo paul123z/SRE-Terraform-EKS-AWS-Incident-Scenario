@@ -110,7 +110,7 @@ This directory contains GitHub Actions workflows for the SRE Demo project. All w
 
 ```bash
 # 1. Clone the repository
-git clone <your-repo-url>
+git clone https://github.com/paul123z/SRE-Terraform-EKS-AWS-Incident-Scenario.git
 cd SRE-Terraform-EKS-AWS-Incident-Scenario
 
 # 2. Deploy infrastructure locally

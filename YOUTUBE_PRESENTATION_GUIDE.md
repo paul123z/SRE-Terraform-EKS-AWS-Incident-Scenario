@@ -581,7 +581,7 @@ docker ps
 
 #### **Step 1: Clone and Navigate**
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/paul123z/SRE-Terraform-EKS-AWS-Incident-Scenario.git
 cd SRE-Terraform-EKS-AWS-Incident-Scenario
 
 # Set up environment variables for the session

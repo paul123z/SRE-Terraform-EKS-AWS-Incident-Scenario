@@ -8,9 +8,9 @@ keywords:
   - sre
   - demo
   - incident
-home: https://github.com/your-repo/sre-terraform-eks-aws-incident-scenario
+home: https://github.com/paul123z/SRE-Terraform-EKS-AWS-Incident-Scenario
 sources:
-  - https://github.com/your-repo/sre-terraform-eks-aws-incident-scenario
+  - https://github.com/paul123z/SRE-Terraform-EKS-AWS-Incident-Scenario
 maintainers:
-  - name: DevOps Team
-    email: devops@company.com 
+  - name: Pavol Lantaj
+    email: pavol.lantaj@gmail.com 

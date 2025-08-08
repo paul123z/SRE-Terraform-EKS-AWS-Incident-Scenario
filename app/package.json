@@ -15,6 +15,6 @@
     "nodemon": "^3.0.1"
   },
   "keywords": ["sre", "demo", "incident"],
-  "author": "DevOps Team",
+  "author": "Pavol Lantaj",
   "license": "MIT"
 } 
