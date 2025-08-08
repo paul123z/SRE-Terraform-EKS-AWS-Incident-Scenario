@@ -1,0 +1,45 @@
+have dependancines installed
+
+| Tool | Version | Status | Notes |
+|------|---------|--------|-------|
+| **Git** | 2.25.1 | ✅ Installed | Required for version control |
+| **AWS CLI** | 2.28.2 | ✅ Installed | Python/3.13.4, Linux/5.15.133.1-microsoft-standard-WSL2 |
+| **Terraform** | 1.8.4 | ✅ Installed | ⚠️ Outdated (latest: 1.12.2) |
+| **kubectl** | 1.26.1 | ✅ Installed | Client version, Kustomize v4.5.7 |
+| **Helm** | 3.18.4 | ✅ Installed | Go version 1.24.4 |
+| **Docker** | 25.0.3 | ✅ Installed | Build 4debf41 |
+| **Python** | 3.13.4 | ✅ Installed | Required for AWS CLI and tools |
+| **pip** | 25.0.1 | ✅ Updated | Python package manager (user install) |
+
+**AWS Configuration**: ✅ Configured (Account: 462738742234, User: Master_admin)
+
+good files to check:
+YOUTUBE_PRESENTATION_GUIDE.md
+ARCHITECTURE_FLOWCHARTS.md
+
+
+./scripts/deploy.sh
+#build infrastructure with terraform, build docker image and push it to ECR, deploy the built image into Default namespace in EKS, deploy monitor namespace in EKS
+
+./scripts/incident-demo.sh
+#it will activate memory leak on your sre-demo-app in Default namespace, monitor it using grafana, it will create a log file in /tmp/incident-logs   or this  \\wsl.localhost\Ubuntu\tmp\incident-logs   and then it uses analyze-incident-bedrock.sh <incident-log>  to actually send the log to bedrock which uses Claude 4 in us-west-1 region. you will see the output in folder bedrock-analysis/
+
+
+most important github workflows are:
+analyze-s3-logs.yml  
+#requires Object url from S3 as input, and then it sends it to AWS Bedrock Claude 4, for AI analysis, prints the results in console output, 
+and stores it as an artifact
+
+build-push-deploy-app.yml  
+#build your application placed in app/ folder, builds the image, by installing dependancies package.json, server.js is the main application, and then it deploys this application using helm in Default namespace in our EKS
+
+
+#DESTRUCTION
+./scripts/teardown.sh
+#this will run terraform destroy -auto-approve, and destroy all of our infrastructure, so we dont pay a high bill
+
+
+./scripts/teardown-verify.sh
+# simple script to check that u have NO EC2 running, no EKS, no vpc, and other resources, sanity check, but feel free to run teardown.sh 2-3x if you want, you cant hurt anything.
+
+
