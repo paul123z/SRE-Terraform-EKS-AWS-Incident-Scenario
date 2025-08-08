@@ -1,5 +1,83 @@
 # 🎥 YouTube Presentation Guide: SRE Terraform EKS AWS Incident Scenario
 
+## 📋 Paulie's Development Environment Dependencies (2025-08-08)
+
+| Tool | Version | Status | Notes |
+|------|---------|--------|-------|
+| **Git** | 2.25.1 | ✅ Installed | Required for version control |
+| **AWS CLI** | 2.28.2 | ✅ Installed | Python/3.13.4, Linux/5.15.133.1-microsoft-standard-WSL2 |
+| **Terraform** | 1.8.4 | ✅ Installed | ⚠️ Outdated (latest: 1.12.2) |
+| **kubectl** | 1.26.1 | ✅ Installed | Client version, Kustomize v4.5.7 |
+| **Helm** | 3.18.4 | ✅ Installed | Go version 1.24.4 |
+| **Docker** | 25.0.3 | ✅ Installed | Build 4debf41 |
+| **Python** | 3.13.4 | ✅ Installed | Required for AWS CLI and tools |
+| **pip** | 25.0.1 | ✅ Updated | Python package manager (user install) |
+
+**AWS Configuration**: ✅ Configured (Account: 462738742234, User: Master_admin)
+
+---
+
+## 🐍 Python & pip Installation (Prerequisites)
+
+### **Why Python is Required**
+Python is needed for AWS CLI and various development tools in this project.
+
+### **Installation Steps**
+
+**1. Check if Python is already installed:**
+```bash
+python3 --version
+python --version
+```
+
+**2. Install Python (if not installed):**
+
+**Ubuntu/Debian:**
+```bash
+sudo apt update
+sudo apt install python3 python3-pip
+```
+
+**CentOS/RHEL:**
+```bash
+sudo yum install python3 python3-pip
+# or for newer versions:
+sudo dnf install python3 python3-pip
+```
+
+**macOS:**
+```bash
+# Using Homebrew (recommended)
+brew install python3
+
+# Or download from https://www.python.org/downloads/
+```
+
+**Windows:**
+```bash
+# Download from https://www.python.org/downloads/
+# Make sure to check "Add Python to PATH" during installation
+```
+
+**3. Verify pip installation:**
+```bash
+pip3 --version
+pip --version
+```
+
+**4. Update pip (recommended):**
+```bash
+python3 -m pip install --upgrade pip
+```
+
+**5. Verify both installations:**
+```bash
+python3 --version
+pip3 --version
+```
+
+---
+
 ## 📋 Video Structure & Key Points
 
 ### **🎯 Important Note**
