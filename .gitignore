@@ -8,6 +8,9 @@ zips/
 .terraform/
 .terraform.lock.hcl
 terraform/.terraform/
+*.tfplan
+tfplan
+*.plan
 
 # Environment variables and secrets
 .env
