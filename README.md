@@ -2,6 +2,15 @@
 
 A comprehensive open-source project designed for the SRE, DevOps, and Cloud community to learn and practice real-world incident response, infrastructure management, and monitoring in a production-like AWS EKS environment. This project showcases modern cloud-native practices using AWS EKS, Terraform, Helm, and GitHub Actions.
 
+## 👨‍💻 About This Project
+
+This open-source project was created by **Pavol Lantaj** as a contribution to the SRE, DevOps, and Cloud community. The goal is to provide hands-on learning experiences with real-world incident scenarios, modern infrastructure practices, and AI-powered incident response techniques.
+
+**Repository**: [https://github.com/paul123z/SRE-Terraform-EKS-AWS-Incident-Scenario](https://github.com/paul123z/SRE-Terraform-EKS-AWS-Incident-Scenario)
+
+### 🎯 Mission
+To democratize SRE knowledge and provide practical, production-like learning environments that help engineers develop critical incident response skills in a safe, controlled setting.
+
 ## 🏗️ Architecture Overview
 
 ```
@@ -557,19 +566,34 @@ This open-source project demonstrates modern cloud-native practices:
 
 ## 🤝 Contributing
 
-This is an open-source project for the SRE, DevOps, and Cloud community. We welcome contributions!
+This open-source project was created by **Pavol Lantaj** and is maintained for the benefit of the SRE, DevOps, and Cloud community. Contributions from the community are highly encouraged and welcomed!
 
+### How to Contribute
 1. Fork the repository
-2. Create a feature branch
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
 3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
+4. Test thoroughly in your own AWS environment
+5. Update documentation as needed
+6. Submit a pull request
+
+### What We're Looking For
+- **New Incident Scenarios**: Additional failure modes and simulation techniques
+- **Monitoring Improvements**: Enhanced dashboards, alerts, and observability
+- **Cost Optimizations**: Ways to reduce AWS costs while maintaining learning value
+- **Documentation**: Tutorials, walkthroughs, and best practice guides
+- **Platform Support**: Support for other cloud providers (Azure, GCP)
+- **AI Enhancements**: Improved incident analysis and automated remediation
 
 ### Community Guidelines
 - Follow best practices for SRE and DevOps
 - Add comprehensive documentation for new features
 - Include tests and validation scripts
 - Consider cost implications for the community
+- Respect the educational nature of the project
+- Share knowledge and help others learn
+
+### Recognition
+All contributors will be recognized in the project documentation. This project thrives on community collaboration and knowledge sharing.
 
 ## 📄 License
 
@@ -596,6 +620,25 @@ For issues and questions:
 2. Review the logs and metrics
 3. Open an issue on GitHub
 4. Join the community discussions
+
+## 🙋‍♂️ Author & Acknowledgments
+
+**Created by**: [Pavol Lantaj](https://github.com/paul123z)  
+**Project Purpose**: Open-source contribution to the SRE/DevOps community  
+**Repository**: [SRE-Terraform-EKS-AWS-Incident-Scenario](https://github.com/paul123z/SRE-Terraform-EKS-AWS-Incident-Scenario)
+
+### Special Thanks
+- The SRE and DevOps community for inspiration and best practices
+- AWS for providing excellent documentation and services
+- The Kubernetes, Terraform, and Helm communities for their amazing tools
+- All contributors who help make this project better
+
+### Connect & Learn Together
+If this project helps you in your SRE journey, consider:
+- ⭐ Starring the repository
+- 🍴 Forking and contributing improvements
+- 📢 Sharing with your team and community
+- 💬 Opening discussions for questions and ideas
 
 ---
 
