@@ -13,7 +13,7 @@
 | **Python** | 3.13.4 | ✅ Installed | Required for AWS CLI and tools |
 | **pip** | 25.0.1 | ✅ Updated | Python package manager (user install) |
 
-**AWS Configuration**: ✅ Configured (Account: 462738742234, User: Master_admin)
+**AWS Configuration**: ✅ Configured (Account: <YOUR_AWS_ACCOUNT_ID>, User: <YOUR_AWS_USER>)
 
 ## 🔐 Required IAM Policies
 
