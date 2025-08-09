@@ -1,7 +1,7 @@
 # AWS CLI and credentials
 aws/
 zips/
-
+*Zone.Identifier
 # Terraform files
 *.tfstate
 *.tfstate.*
