@@ -1,155 +1,204 @@
-name: Deploy to EKS
+name: Deploy SRE Demo Infrastructure
 
 on:
   workflow_dispatch:  # Manual trigger only
 
 env:
   AWS_REGION: eu-central-1
-  EKS_CLUSTER_NAME: sre-incident-demo-cluster
+  CLUSTER_NAME: sre-incident-demo-cluster
   ECR_REPOSITORY: sre-demo-app
+  APP_NAME: sre-demo-app
+  NAMESPACE: default
+  TF_STATE_BUCKET: sre-incident-demo-terraform-state
+  TF_STATE_KEY: terraform.tfstate
+  TF_STATE_REGION: eu-central-1
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: false
-    
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
-        cache-dependency-path: app/package-lock.json
-    
-    - name: Install dependencies
-      run: |
-        cd app
-        npm install || echo "npm install failed, will use Docker build instead"
-    
-    - name: Run tests
-      run: |
-        cd app
-        npm test || echo "No tests configured yet" || true
-
-  build-and-push:
-    needs: test
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+  deploy:
+    runs-on: ubuntu-22.04  # Specific Ubuntu version for stability
     
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4.1.0  # Pinned version
       with:
         submodules: false
-    
+        
+    - name: Setup Python 3.11
+      uses: actions/setup-python@v4.7.0  # Pinned version
+      with:
+        python-version: '3.11.9'  # Specific Python version
+        
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip==23.3.2
+        pip install awscli==1.32.69 boto3==1.34.69
+        
+    - name: Setup Node.js 18
+      uses: actions/setup-node@v4.1.0  # Pinned version
+      with:
+        node-version: '18.19.0'  # Specific Node.js version
+        
+    - name: Install AWS CLI v2
+      run: |
+        curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-2.15.42.zip" -o "awscliv2.zip"
+        unzip awscliv2.zip
+        sudo ./aws/install
+        aws --version
+        
+    - name: Install kubectl
+      run: |
+        curl -LO "https://dl.k8s.io/release/v1.28.8/bin/linux/amd64/kubectl"
+        chmod +x kubectl
+        sudo mv kubectl /usr/local/bin/
+        kubectl version --client
+        
+    - name: Install Helm
+      run: |
+        curl https://get.helm.sh/helm-v3.13.3-linux-amd64.tar.gz | tar xz
+        sudo mv linux-amd64/helm /usr/local/bin/
+        helm version
+        
+    - name: Install Terraform
+      run: |
+        curl -fsSL https://releases.hashicorp.com/terraform/1.7.5/terraform_1.7.5_linux_amd64.zip -o terraform.zip
+        unzip terraform.zip
+        sudo mv terraform /usr/local/bin/
+        terraform version
+        
+    - name: Install Docker
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ca-certificates=20230311 curl=7.68.0-1ubuntu2.18 gnupg=2.2.19-3ubuntu2.2 lsb-release=11.1.0ubuntu2
+        sudo mkdir -p /etc/apt/keyrings
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+        sudo apt-get update
+        sudo apt-get install -y docker-ce=5:24.0.7-1~ubuntu.22.04~jammy docker-ce-cli=5:24.0.7-1~ubuntu.22.04~jammy containerd.io=1.6.24-1 docker-buildx-plugin=0.11.2-1~ubuntu.22.04~jammy docker-compose-plugin=2.20.3-1~ubuntu.22.04~jammy
+        sudo systemctl start docker
+        sudo systemctl enable docker
+        docker --version
+        
+    - name: Install additional tools
+      run: |
+        sudo apt-get install -y jq=1.6-1ubuntu1 curl=7.68.0-1ubuntu2.18 wget=1.20.3-1ubuntu2 unzip=6.0-25ubuntu1.1 git=1:2.34.1-1ubuntu1.10
+        curl -sL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+        sudo apt-get install -y nodejs=18.19.0-1nodesource1
+        
     - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
+      uses: aws-actions/configure-aws-credentials@v4.0.2  # Pinned version
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.AWS_REGION }}
-    
+        
     - name: Login to Amazon ECR
       id: login-ecr
-      uses: aws-actions/amazon-ecr-login@v2
-    
-    - name: Build, tag, and push image to Amazon ECR
-      env:
-        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        IMAGE_TAG: ${{ github.sha }}
+      uses: aws-actions/amazon-ecr-login@v2.0.0  # Pinned version
+        
+    - name: Create S3 bucket for Terraform state
       run: |
-        cd app
-        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
-
-  deploy:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: false
-    
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.AWS_REGION }}
-    
-    - name: Update kubeconfig
-      run: aws eks update-kubeconfig --region eu-central-1 --name ${{ env.EKS_CLUSTER_NAME }}
-    
-    - name: Install Helm
-      uses: azure/setup-helm@v3
-      with:
-        version: v3.12.0
-    
-    - name: Deploy to EKS using Helm
+        echo "🪣 Creating S3 bucket for Terraform state..."
+        aws s3api create-bucket \
+          --bucket ${{ env.TF_STATE_BUCKET }} \
+          --region ${{ env.TF_STATE_REGION }} \
+          --create-bucket-configuration LocationConstraint=${{ env.TF_STATE_REGION }} \
+          || echo "Bucket already exists or creation failed"
+        
+        # Enable versioning for state file safety
+        aws s3api put-bucket-versioning \
+          --bucket ${{ env.TF_STATE_BUCKET }} \
+          --versioning-configuration Status=Enabled
+        
+        # Enable server-side encryption
+        aws s3api put-bucket-encryption \
+          --bucket ${{ env.TF_STATE_BUCKET }} \
+          --server-side-encryption-configuration '{
+            "Rules": [
+              {
+                "ApplyServerSideEncryptionByDefault": {
+                  "SSEAlgorithm": "AES256"
+                }
+              }
+            ]
+          }'
+        
+        echo "✅ S3 bucket configured for Terraform state"
+        
+    - name: Check for existing Terraform state
+      id: check-state
       run: |
-        cd helm/sre-demo-app
-        helm upgrade --install sre-demo-app . \
-          --set image.repository=${{ needs.build-and-push.outputs.image }} \
-          --set image.tag=${{ github.sha }} \
-          --namespace default \
-          --create-namespace \
-          --wait \
-          --timeout 5m
-    
-    - name: Verify deployment
+        echo "🔍 Checking for existing Terraform state..."
+        if aws s3 ls s3://${{ env.TF_STATE_BUCKET }}/${{ env.TF_STATE_KEY }} 2>/dev/null; then
+          echo "📁 Found existing Terraform state in S3"
+          echo "exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "📁 No existing Terraform state found in S3"
+          echo "exists=false" >> $GITHUB_OUTPUT
+        fi
+        
+    - name: Download existing Terraform state (if exists)
+      if: steps.check-state.outputs.exists == 'true'
       run: |
-        kubectl get pods -l app.kubernetes.io/name=sre-demo-app
-        kubectl get svc -l app.kubernetes.io/name=sre-demo-app
-        kubectl get hpa -l app.kubernetes.io/name=sre-demo-app
-
-  terraform-plan:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: false
-    
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.AWS_REGION }}
-    
-    - name: Setup Terraform
-      uses: hashicorp/setup-terraform@v3
-      with:
-        terraform_version: 1.5.0
-    
-    - name: Terraform Init
+        echo "⬇️  Downloading existing Terraform state from S3..."
+        aws s3 cp s3://${{ env.TF_STATE_BUCKET }}/${{ env.TF_STATE_KEY }} terraform/terraform.tfstate
+        echo "✅ Terraform state downloaded from S3"
+        
+    - name: Configure Terraform backend for S3
       run: |
+        echo "⚙️  Configuring Terraform backend for S3..."
         cd terraform
-        terraform init
-    
-    - name: Terraform Plan
+        
+        # Create backend configuration file
+        cat > backend.tf <<EOF
+        terraform {
+          backend "s3" {
+            bucket = "${{ env.TF_STATE_BUCKET }}"
+            key    = "${{ env.TF_STATE_KEY }}"
+            region = "${{ env.TF_STATE_REGION }}"
+          }
+        }
+        EOF
+        
+        # Initialize Terraform with S3 backend
+        terraform init -reconfigure
+        echo "✅ Terraform backend configured for S3"
+        
+    - name: Deploy infrastructure with Terraform
       run: |
+        echo "🏗️  Deploying infrastructure with Terraform..."
         cd terraform
+        
+        # Plan the deployment
         terraform plan -out=tfplan
-      continue-on-error: true
-    
-    - name: Comment PR
-      uses: actions/github-script@v7
-      if: github.event_name == 'pull_request'
-      with:
-        script: |
-          const fs = require('fs');
-          const plan = fs.readFileSync('terraform/tfplan', 'utf8');
-          github.rest.issues.createComment({
-            issue_number: context.issue.number,
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            body: '## Terraform Plan\n```\n' + plan + '\n```'
-          }); 
+        
+        # Apply the plan
+        terraform apply -auto-approve tfplan
+        
+        echo "✅ Infrastructure deployment completed"
+        
+    - name: Upload Terraform state to S3
+      run: |
+        echo "⬆️  Uploading Terraform state to S3..."
+        aws s3 cp terraform/terraform.tfstate s3://${{ env.TF_STATE_BUCKET }}/${{ env.TF_STATE_KEY }}
+        echo "✅ Terraform state uploaded to S3"
+        
+    - name: Make scripts executable
+      run: |
+        chmod +x scripts/*.sh
+        
+    - name: Show deployment summary
+      run: |
+        echo "✅ Infrastructure deployment completed successfully!"
+        echo ""
+        echo "🌐 Cluster: ${{ env.CLUSTER_NAME }}"
+        echo "🏗️  Region: ${{ env.AWS_REGION }}"
+        echo "📦 App: ${{ env.APP_NAME }}"
+        echo "🪣 Terraform State: s3://${{ env.TF_STATE_BUCKET }}/${{ env.TF_STATE_KEY }}"
+        echo ""
+        echo "🔍 Next steps:"
+        echo "1. Run build-push-deploy-app workflow to deploy the application"
+        echo "2. Run incident demo: ./scripts/incident-demo.sh"
+        echo "3. Access Grafana: kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80"
+        echo "4. Check app status: kubectl get pods -l app.kubernetes.io/name=${{ env.APP_NAME }}"
+        echo ""
+        echo "🗑️  To clean up: Run the teardown workflow" 

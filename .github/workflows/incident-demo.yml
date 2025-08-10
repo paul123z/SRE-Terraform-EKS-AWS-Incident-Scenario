@@ -1,4 +1,4 @@
-name: Deploy Application Only
+name: Run SRE Incident Demo
 
 on:
   workflow_dispatch:  # Manual trigger only
@@ -7,10 +7,10 @@ env:
   AWS_REGION: eu-central-1
   CLUSTER_NAME: sre-incident-demo-cluster
   APP_NAME: sre-demo-app
-  ECR_REPOSITORY: sre-demo-app
+  NAMESPACE: default
 
 jobs:
-  deploy:
+  incident-demo:
     runs-on: ubuntu-22.04  # Specific Ubuntu version for stability
     
     steps:
@@ -60,7 +60,7 @@ jobs:
         sudo apt-get install -y jq=1.6-1ubuntu1 curl=7.68.0-1ubuntu2.18 wget=1.20.3-1ubuntu2 unzip=6.0-25ubuntu1.1 git=1:2.34.1-1ubuntu1.10
         curl -sL https://deb.nodesource.com/setup_18.x | sudo -E bash -
         sudo apt-get install -y nodejs=18.19.0-1nodesource1
-      
+        
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4.0.2  # Pinned version
       with:
@@ -68,42 +68,39 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.AWS_REGION }}
         
-    - name: Login to Amazon ECR
-      id: login-ecr
-      uses: aws-actions/amazon-ecr-login@v2.0.0  # Pinned version
-      
     - name: Update kubeconfig
       run: |
         aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.CLUSTER_NAME }}
         
-    - name: Deploy application with Helm
+    - name: Make scripts executable
       run: |
-        # Get the latest image tag from ECR
-        LATEST_IMAGE=$(aws ecr describe-images \
-          --repository-name ${{ env.ECR_REPOSITORY }} \
-          --region ${{ env.AWS_REGION }} \
-          --query 'imageDetails[?imageTags[?contains(@, `latest`)]].imageTags[0]' \
-          --output text)
+        chmod +x scripts/*.sh
         
-        # Deploy using Helm
-        helm upgrade --install ${{ env.APP_NAME }} ./helm/sre-demo-app \
-          --set image.repository=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }} \
-          --set image.tag=latest \
-          --namespace default \
-          --wait \
-          --timeout 5m
-          
-    - name: Verify deployment
+    - name: Verify cluster access
       run: |
-        kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=${{ env.APP_NAME }} --timeout=300s
+        kubectl cluster-info
+        kubectl get nodes
+        echo "✅ Cluster access verified"
+        
+    - name: Check application status before demo
+      run: |
+        echo "📊 Application status before incident demo:"
         kubectl get pods -l app.kubernetes.io/name=${{ env.APP_NAME }}
         kubectl get svc ${{ env.APP_NAME }}
+        kubectl get hpa -l app.kubernetes.io/name=${{ env.APP_NAME }}
         
-    - name: Show deployment info
+    - name: Run incident demo script
       run: |
-        echo "✅ Application deployed successfully!"
-        echo "🌐 Service URL:"
-        kubectl get svc ${{ env.APP_NAME }} -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+        echo "🚨 Starting SRE Incident Demo..."
+        ./scripts/incident-demo.sh
+        
+    - name: Show demo results
+      run: |
+        echo "🎭 Incident Demo completed!"
         echo ""
-        echo "📊 Pod status:"
-        kubectl get pods -l app.kubernetes.io/name=${{ env.APP_NAME }} 
+        echo "📊 Final application status:"
+        kubectl get pods -l app.kubernetes.io/name=${{ env.APP_NAME }}
+        kubectl get events --sort-by='.lastTimestamp' | tail -20
+        echo ""
+        echo "🔍 Check application health:"
+        kubectl get svc ${{ env.APP_NAME }} -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "Service not ready yet"
