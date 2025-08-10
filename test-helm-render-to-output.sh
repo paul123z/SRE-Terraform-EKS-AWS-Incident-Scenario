@@ -1,0 +1,1 @@
+cd helm/sre-demo-app && helm template test-release . --set image.repository=123456789012.dkr.ecr.us-west-2.amazonaws.com/sre-demo-app --set image.tag=latest > rendered-manifests.yaml
