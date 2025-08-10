@@ -16,10 +16,10 @@ if ! command -v gitleaks &> /dev/null; then
 fi
 
 # Run gitleaks scan
-echo "Scanning repository for secrets and credentials..."
+echo "Scanning current files AND Git history for secrets..."
 echo
 
-if gitleaks detect --source . --verbose; then
+if gitleaks detect --source . --log-opts="--all" --verbose; then
     echo
     echo "✅ No secrets found in repository!"
     echo "🛡️  Your repository is secure."

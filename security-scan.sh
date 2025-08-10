@@ -29,8 +29,8 @@ command_exists() {
 # 1. GITLEAKS SCAN
 echo -e "${YELLOW}🔍 Running Gitleaks scan...${NC}"
 if command_exists gitleaks; then
-    echo "Scanning current files and Git history for secrets..."
-    if gitleaks detect --source . --verbose --report-format json --report-path "security-scan-results/gitleaks-$TIMESTAMP.json" --exit-code 0; then
+    echo "Scanning current files AND Git history for secrets..."
+    if gitleaks detect --source . --log-opts="--all" --verbose --report-format json --report-path "security-scan-results/gitleaks-$TIMESTAMP.json" --exit-code 0; then
         echo -e "${GREEN}✅ Gitleaks scan completed${NC}"
         
         # Count findings
