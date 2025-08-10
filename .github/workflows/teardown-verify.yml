@@ -60,7 +60,7 @@ jobs:
         echo "Checking for remaining EKS clusters..."
         clusters=$(aws eks list-clusters --region ${{ env.AWS_REGION }} --query 'clusters[?contains(@, `sre-incident-demo`)]' --output text)
         if [ -n "$clusters" ]; then
-          echo "❌ Found remaining EKS clusters: $clusters"
+          echo "❌ Found remaining EKS clusters: [MASKED]"
           exit 1
         else
           echo "✅ No remaining EKS clusters found"
@@ -70,7 +70,7 @@ jobs:
         echo "Checking for remaining ECR repositories..."
         repos=$(aws ecr describe-repositories --region ${{ env.AWS_REGION }} --query 'repositories[?contains(repositoryName, `sre-incident-demo`)].repositoryName' --output text)
         if [ -n "$repos" ]; then
-          echo "❌ Found remaining ECR repositories: $repos"
+          echo "❌ Found remaining ECR repositories: [MASKED]"
           exit 1
         else
           echo "✅ No remaining ECR repositories found"
@@ -80,7 +80,7 @@ jobs:
         echo "Checking for remaining VPCs..."
         vpcs=$(aws ec2 describe-vpcs --region ${{ env.AWS_REGION }} --filters "Name=tag:Name,Values=${{ env.VPC_NAME }}" --query 'Vpcs[].VpcId' --output text)
         if [ -n "$vpcs" ]; then
-          echo "❌ Found remaining VPCs: $vpcs"
+          echo "❌ Found remaining VPCs: [MASKED]"
           exit 1
         else
           echo "✅ No remaining VPCs found"
@@ -90,7 +90,7 @@ jobs:
         echo "Checking for remaining Load Balancers..."
         lbs=$(aws elbv2 describe-load-balancers --region ${{ env.AWS_REGION }} --query 'LoadBalancers[?contains(LoadBalancerName, `sre-incident-demo`)].LoadBalancerName' --output text)
         if [ -n "$lbs" ]; then
-          echo "❌ Found remaining Load Balancers: $lbs"
+          echo "❌ Found remaining Load Balancers: [MASKED]"
           exit 1
         else
           echo "✅ No remaining Load Balancers found"
@@ -108,7 +108,7 @@ jobs:
         # Check for any remaining S3 state bucket
         echo "Checking for remaining S3 state bucket..."
         if aws s3 ls s3://${{ env.TF_STATE_BUCKET }} 2>/dev/null; then
-          echo "❌ Found remaining S3 state bucket: ${{ env.TF_STATE_BUCKET }}"
+          echo "❌ Found remaining S3 state bucket: [MASKED]"
           exit 1
         else
           echo "✅ No remaining S3 state bucket found"

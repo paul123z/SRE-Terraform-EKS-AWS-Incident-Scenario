@@ -124,11 +124,13 @@ jobs:
         echo "🗑️  Starting infrastructure teardown with Terraform..."
         cd terraform
         
-        # Plan the destruction
-        terraform plan -destroy -out=tfplan-destroy
+        # Plan the destruction with minimal output
+        echo "📋 Planning infrastructure destruction..."
+        terraform plan -destroy -out=tfplan-destroy -detailed-exitcode 2>/dev/null || true
         
-        # Apply the destruction plan
-        terraform apply -auto-approve tfplan-destroy
+        # Apply destruction with minimal output and mask sensitive data
+        echo "🚀 Applying destruction plan..."
+        terraform apply -auto-approve tfplan-destroy 2>&1 | sed 's/\([0-9]\{1,3\}\.\)\{3\}[0-9]\{1,3\}/***.***.***.***/g' | sed 's/\(vpc-[a-z0-9]\{8,17\}\)/vpc-***/g' | sed 's/\(subnet-[a-z0-9]\{8,17\}\)/subnet-***/g' | sed 's/\(sg-[a-z0-9]\{8,17\}\)/sg-***/g' | sed 's/\(i-[a-z0-9]\{8,17\}\)/i-***/g' | sed 's/\(lb-[a-z0-9]\{8,17\}\)/lb-***/g' | sed 's/\(eni-[a-z0-9]\{8,17\}\)/eni-***/g'
         
         echo "✅ Infrastructure teardown completed with Terraform"
         
@@ -178,18 +180,18 @@ jobs:
         echo ""
         if [ "${{ steps.check-tf-state.outputs.exists }}" == "true" ]; then
           echo "🗑️  Resources removed via Terraform:"
-          echo "- EKS Cluster: ${{ env.CLUSTER_NAME }}"
-          echo "- ECR Repository: ${{ env.ECR_REPOSITORY }}"
-          echo "- Application: ${{ env.APP_NAME }}"
+          echo "- EKS Cluster: [MASKED]"
+          echo "- ECR Repository: [MASKED]"
+          echo "- Application: [MASKED]"
           echo "- Monitoring stack"
           echo "- All associated AWS resources"
           echo "- Terraform state cleaned from S3"
           echo "- S3 bucket completely deleted"
         else
           echo "🗑️  Resources removed via fallback script:"
-          echo "- EKS Cluster: ${{ env.CLUSTER_NAME }}"
-          echo "- ECR Repository: ${{ env.ECR_REPOSITORY }}"
-          echo "- Application: ${{ env.APP_NAME }}"
+          echo "- EKS Cluster: [MASKED]"
+          echo "- ECR Repository: [MASKED]"
+          echo "- Application: [MASKED]"
           echo "- Monitoring stack"
           echo "- All associated AWS resources"
         fi

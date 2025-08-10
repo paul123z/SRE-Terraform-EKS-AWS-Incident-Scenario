@@ -102,8 +102,6 @@ jobs:
     - name: Show deployment info
       run: |
         echo "✅ Application deployed successfully!"
-        echo "🌐 Service URL:"
-        kubectl get svc ${{ env.APP_NAME }} -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+        echo "🌐 Service URL: [MASKED]"
         echo ""
-        echo "📊 Pod status:"
-        kubectl get pods -l app.kubernetes.io/name=${{ env.APP_NAME }} 
+        echo "📊 Pod status: [MASKED]" 

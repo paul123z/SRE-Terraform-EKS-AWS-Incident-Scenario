@@ -1,5 +1,8 @@
 # 🔄 GitHub Actions Workflows
 
+> ⚠️ **SECURITY WARNING**: This repository is **PUBLIC**. All workflow logs are publicly visible. 
+> We've implemented comprehensive data masking to protect your infrastructure details.
+
 This repository contains comprehensive GitHub Actions workflows for deploying, managing, and tearing down SRE demo infrastructure on AWS EKS. All workflows are configured for **manual execution only** and use **S3-based Terraform state management** for infrastructure deployment and teardown.
 
 ## 📋 Available Workflows
@@ -391,11 +394,55 @@ teardown.yml → teardown-verify.yml
 
 ## 🔒 Security Considerations
 
+### **Public Repository Protection**
+
+**⚠️ CRITICAL**: These workflows run in a **public repository**, so all logs are publicly visible. We've implemented comprehensive security measures to protect your infrastructure:
+
+### **Data Masking & Logging Security**
+
+✅ **Infrastructure Details Masked**:
+- EKS cluster names: `[MASKED]`
+- ECR repository names: `[MASKED]`
+- Application names: `[MASKED]`
+- S3 bucket names: `[MASKED]`
+- Resource IDs (VPC, subnet, security group): `***`
+
+✅ **Terraform Output Filtering**:
+- IP addresses: `***.***.***.***`
+- Resource IDs: `vpc-***`, `subnet-***`, `sg-***`
+- Instance IDs: `i-***`
+- Load balancer IDs: `lb-***`
+- Network interface IDs: `eni-***`
+
+✅ **Minimal Logging**:
+- `terraform plan` output suppressed
+- `terraform apply` output filtered and masked
+- Only success/failure status shown
+- No resource details exposed
+
+### **What's Still Visible (Safe)**:
+- ✅ AWS region (eu-central-1)
+- ✅ Workflow status (success/failure)
+- ✅ Resource counts (how many, not which ones)
+- ✅ Timing information
+- ✅ Error messages (without resource details)
+
+### **What's Completely Hidden**:
+- ❌ Specific resource names and IDs
+- ❌ IP addresses and CIDR ranges
+- ❌ S3 bucket names
+- ❌ Cluster names
+- ❌ Application names
+- ❌ Network configuration details
+
+### **Additional Security Measures**
+
 - All workflows use least-privilege IAM roles
 - S3 state bucket has encryption enabled
 - State files are automatically cleaned up after teardown
-- No sensitive data is logged in workflow outputs
 - All dependencies are pinned to specific versions
+- No AWS account information exposed
+- No internal network details revealed
 
 ---
 

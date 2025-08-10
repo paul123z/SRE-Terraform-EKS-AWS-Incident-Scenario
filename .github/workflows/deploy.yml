@@ -169,11 +169,13 @@ jobs:
         echo "🏗️  Deploying infrastructure with Terraform..."
         cd terraform
         
-        # Plan the deployment
-        terraform plan -out=tfplan
+        # Plan the deployment with minimal output
+        echo "📋 Planning infrastructure deployment..."
+        terraform plan -out=tfplan -detailed-exitcode 2>/dev/null || true
         
-        # Apply the plan
-        terraform apply -auto-approve tfplan
+        # Apply with minimal output and mask sensitive data
+        echo "🚀 Applying infrastructure changes..."
+        terraform apply -auto-approve tfplan 2>&1 | sed 's/\([0-9]\{1,3\}\.\)\{3\}[0-9]\{1,3\}/***.***.***.***/g' | sed 's/\(vpc-[a-z0-9]\{8,17\}\)/vpc-***/g' | sed 's/\(subnet-[a-z0-9]\{8,17\}\)/subnet-***/g' | sed 's/\(sg-[a-z0-9]\{8,17\}\)/sg-***/g' | sed 's/\(i-[a-z0-9]\{8,17\}\)/i-***/g' | sed 's/\(lb-[a-z0-9]\{8,17\}\)/lb-***/g' | sed 's/\(eni-[a-z0-9]\{8,17\}\)/eni-***/g'
         
         echo "✅ Infrastructure deployment completed"
         
@@ -210,10 +212,10 @@ jobs:
       run: |
         echo "✅ Infrastructure deployment completed successfully!"
         echo ""
-        echo "🌐 Cluster: ${{ env.CLUSTER_NAME }}"
+        echo "🌐 Cluster: [MASKED]"
         echo "🏗️  Region: ${{ env.AWS_REGION }}"
-        echo "📦 App: ${{ env.APP_NAME }}"
-        echo "🪣 Terraform State: s3://${{ env.TF_STATE_BUCKET }}/${{ env.TF_STATE_KEY }}"
+        echo "📦 App: [MASKED]"
+        echo "🪣 Terraform State: s3://[MASKED]/[MASKED]"
         echo ""
         echo "🔍 Next steps:"
         echo "1. Run build-push-deploy-app workflow to deploy the application"

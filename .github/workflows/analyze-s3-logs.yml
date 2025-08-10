@@ -69,8 +69,8 @@ jobs:
           exit 1
         fi
         
-        echo "Extracted bucket: $BUCKET"
-        echo "Extracted key: $KEY"
+        echo "Extracted bucket: [MASKED]"
+        echo "Extracted key: [MASKED]"
         
         # Set outputs for next steps
         echo "bucket=$BUCKET" >> $GITHUB_OUTPUT
@@ -81,9 +81,8 @@ jobs:
         echo "Downloading log file from S3..."
         aws s3 cp "s3://${{ steps.s3-info.outputs.bucket }}/${{ steps.s3-info.outputs.key }}" ./incident-log.log
         
-        echo "Log file size: $(wc -c < incident-log.log) bytes"
-        echo "Log file preview (first 500 characters):"
-        head -c 500 incident-log.log
+        echo "Log file size: [MASKED] bytes"
+        echo "Log file preview: [MASKED]"
         
     - name: Copy analysis script
       run: |
@@ -101,13 +100,13 @@ jobs:
           echo "📄 Bedrock Response File Contents:"
           cat bedrock-response.json
           echo ""
-          echo "📊 Response Summary:"
-          echo "File size: $(wc -c < bedrock-response.json) bytes"
-          echo "Response ID: $(jq -r '.id // "N/A"' bedrock-response.json 2>/dev/null || echo "N/A")"
-          echo "Model used: $(jq -r '.model // "N/A"' bedrock-response.json 2>/dev/null || echo "N/A")"
-          echo "Stop reason: $(jq -r '.stop_reason // "N/A"' bedrock-response.json 2>/dev/null || echo "N/A")"
-          echo "Input tokens: $(jq -r '.usage.input_tokens // "N/A"' bedrock-response.json 2>/dev/null || echo "N/A")"
-          echo "Output tokens: $(jq -r '.usage.output_tokens // "N/A"' bedrock-response.json 2>/dev/null || echo "N/A")"
+                  echo "📊 Response Summary:"
+        echo "File size: [MASKED] bytes"
+        echo "Response ID: [MASKED]"
+        echo "Model used: [MASKED]"
+        echo "Stop reason: [MASKED]"
+        echo "Input tokens: [MASKED]"
+        echo "Output tokens: [MASKED]"
         else
           echo "❌ bedrock-response.json not found"
         fi
