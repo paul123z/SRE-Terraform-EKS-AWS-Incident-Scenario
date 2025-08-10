@@ -118,6 +118,7 @@ jobs:
         echo "✅ Terraform backend configured for S3"
         
     - name: Teardown infrastructure with Terraform
+      id: terraform-teardown
       if: steps.check-tf-state.outputs.exists == 'true'
       run: |
         echo "🗑️  Starting infrastructure teardown with Terraform..."
@@ -138,18 +139,40 @@ jobs:
         echo "🗑️  Starting fallback infrastructure teardown..."
         ./scripts/teardown.sh
         
-    - name: Clean up Terraform state from S3
-      if: steps.check-tf-state.outputs.exists == 'true'
+    - name: Clean up Terraform state from S3 (Always)
+      if: always() && steps.check-tf-state.outputs.exists == 'true'
       run: |
         echo "🧹 Cleaning up Terraform state from S3..."
         aws s3 rm s3://${{ env.TF_STATE_BUCKET }}/${{ env.TF_STATE_KEY }}
         echo "✅ Terraform state removed from S3"
         
+    - name: Delete S3 bucket completely (on success)
+      if: success() && steps.check-tf-state.outputs.exists == 'true'
+      run: |
+        echo "🗑️  Deleting S3 bucket completely..."
+        # Force delete bucket and all contents
+        aws s3 rb s3://${{ env.TF_STATE_BUCKET }} --force
+        echo "✅ S3 bucket completely deleted"
+        
+    - name: Handle teardown failure
+      if: failure() && steps.terraform-teardown.outcome == 'failure'
+      run: |
+        echo "❌ Infrastructure teardown failed!"
+        echo "⚠️  Some resources may still exist"
+        echo "📁 Terraform state has been cleaned from S3"
+        echo ""
+        echo "🔧 Next steps:"
+        echo "1. Check the error logs above"
+        echo "2. Manually clean up remaining resources if needed"
+        echo "3. Check AWS console for orphaned resources"
+        
     - name: Make scripts executable
+      if: success()
       run: |
         chmod +x scripts/*.sh
         
     - name: Show teardown summary
+      if: success()
       run: |
         echo "✅ Teardown completed!"
         echo ""
@@ -161,6 +184,7 @@ jobs:
           echo "- Monitoring stack"
           echo "- All associated AWS resources"
           echo "- Terraform state cleaned from S3"
+          echo "- S3 bucket completely deleted"
         else
           echo "🗑️  Resources removed via fallback script:"
           echo "- EKS Cluster: ${{ env.CLUSTER_NAME }}"

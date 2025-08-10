@@ -113,7 +113,7 @@ This open-source SRE project consists of several interconnected components, each
 - **`deploy-app-only.yml`**: Quick deployment of existing images
 - **`analyze-s3-logs.yml`**: AI-powered incident log analysis using S3 object URLs
 
-**Important**: Infrastructure provisioning is done **locally with Terraform** for security and cost control.
+**Important**: Infrastructure provisioning can be done **locally with Terraform** or **via GitHub Actions** for team collaboration. See [`.github/GITHUB_ACTIONS_README.md`](.github/GITHUB_ACTIONS_README.md) for comprehensive workflow documentation.
 
 **Key Benefits**:
 - Automated application deployment pipeline reduces human error
@@ -446,34 +446,24 @@ kubectl rollout status deployment sre-demo-app
 
 ## 🛠️ CI/CD Pipeline
 
-The project includes multiple GitHub Actions workflows:
+The project includes comprehensive GitHub Actions workflows for automated deployment and management. **For detailed workflow documentation, see [`.github/GITHUB_ACTIONS_README.md`](.github/GITHUB_ACTIONS_README.md).**
 
-### **deploy.yml** - Full Infrastructure & Application Deployment
-- **Trigger**: Manual (`workflow_dispatch`)
-- **Purpose**: Complete end-to-end deployment
-- **Steps**: Infrastructure → Build → Push → Deploy → Monitoring
+### **Key Workflows**:
+- **`deploy.yml`**: Complete infrastructure deployment with S3 state management
+- **`teardown.yml`**: Safe infrastructure teardown with state cleanup
+- **`build-push-deploy-app.yml`**: Application build, push, and deployment
+- **`incident-demo.yml`**: SRE incident scenario demonstrations
+- **`analyze-s3-logs.yml`**: AI-powered incident log analysis
 
-### **build-push-deploy-app.yml** - Build, Push & Deploy Application
-- **Trigger**: Manual (`workflow_dispatch`)
-- **Purpose**: Build new image and deploy application
-- **Steps**: Build → Push → Deploy → Verify
-- **Use case**: When you've updated application code and want to deploy
-
-### **deploy-app-only.yml** - Application Deployment Only
-- **Trigger**: Manual (`workflow_dispatch`)
-- **Purpose**: Deploy existing application image
-- **Steps**: Deploy → Verify
-- **Use case**: When you want to redeploy the same image
-
-### Workflow Features:
+### **Workflow Features**:
 1. **Testing**: Node.js application tests
-2. **Building**: Docker image build
-3. **Pushing**: ECR image push
-4. **Deploying**: Helm chart deployment
-5. **Verification**: Deployment status check
+2. **Building**: Docker image build with version pinning
+3. **Pushing**: ECR image push with unique tagging
+4. **Deploying**: Helm chart deployment with health checks
+5. **Verification**: Deployment status and resource validation
+6. **State Management**: S3-based Terraform state for team collaboration
 
-### GitHub Secrets Required
-
+### **GitHub Secrets Required**:
 - `AWS_ACCESS_KEY_ID`: AWS access key
 - `AWS_SECRET_ACCESS_KEY`: AWS secret key
 

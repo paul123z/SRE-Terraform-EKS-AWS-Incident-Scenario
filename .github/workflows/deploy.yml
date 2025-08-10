@@ -164,6 +164,7 @@ jobs:
         echo "✅ Terraform backend configured for S3"
         
     - name: Deploy infrastructure with Terraform
+      id: terraform-deploy
       run: |
         echo "🏗️  Deploying infrastructure with Terraform..."
         cd terraform
@@ -176,17 +177,36 @@ jobs:
         
         echo "✅ Infrastructure deployment completed"
         
-    - name: Upload Terraform state to S3
+    - name: Upload Terraform state to S3 (Always)
+      if: always()
       run: |
         echo "⬆️  Uploading Terraform state to S3..."
-        aws s3 cp terraform/terraform.tfstate s3://${{ env.TF_STATE_BUCKET }}/${{ env.TF_STATE_KEY }}
-        echo "✅ Terraform state uploaded to S3"
+        if [ -f "terraform/terraform.tfstate" ]; then
+          aws s3 cp terraform/terraform.tfstate s3://${{ env.TF_STATE_BUCKET }}/${{ env.TF_STATE_KEY }}
+          echo "✅ Terraform state uploaded to S3"
+        else
+          echo "⚠️  No terraform.tfstate file found to upload"
+        fi
+        
+    - name: Handle deployment failure
+      if: failure() && steps.terraform-deploy.outcome == 'failure'
+      run: |
+        echo "❌ Infrastructure deployment failed!"
+        echo "⚠️  Partial resources may have been created"
+        echo "📁 Terraform state has been uploaded to S3 for cleanup"
+        echo ""
+        echo "🔧 Next steps:"
+        echo "1. Check the error logs above"
+        echo "2. Run the teardown workflow to clean up partial resources"
+        echo "3. Fix the issue and re-run deployment"
         
     - name: Make scripts executable
+      if: success()
       run: |
         chmod +x scripts/*.sh
         
     - name: Show deployment summary
+      if: success()
       run: |
         echo "✅ Infrastructure deployment completed successfully!"
         echo ""
