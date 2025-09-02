@@ -1,4 +1,4 @@
-name: 🚨 Incident Simulation Demo
+name: Incident Simulation Demo
 
 on:
   workflow_dispatch:

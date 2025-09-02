@@ -1,4 +1,4 @@
-name: 🧹 Teardown Infrastructure
+name: Teardown Infrastructure
 
 on:
   workflow_dispatch:

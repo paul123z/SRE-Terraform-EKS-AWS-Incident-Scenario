@@ -1,4 +1,4 @@
-name: 🚀 Deploy SRE Infrastructure & Application
+name: Deploy SRE Infrastructure & Application
 
 on:
   workflow_dispatch:
