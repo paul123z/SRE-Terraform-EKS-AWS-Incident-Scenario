@@ -290,16 +290,26 @@ jobs:
           terraform_version: 1.8.4
           terraform_wrapper: false
 
-      - name: Setup Terraform Backend
+      - name: Configure Terraform Backend for Teardown
         working-directory: terraform
         run: |
-          echo "🔧 Setting up Terraform backend..."
+          echo "🔧 Configuring Terraform backend for teardown..."
+          
+          # Backup existing backend configuration
+          if grep -q "backend.*local" main.tf; then
+            echo "📁 Found local backend in main.tf, backing up..."
+            cp main.tf main.tf.backup
+            
+            # Remove local backend from main.tf temporarily
+            sed -i '/backend "local"/,/}/d' main.tf
+            echo "✅ Local backend temporarily removed"
+          fi
           
           # Get AWS account ID
           AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           STATE_BUCKET="${{ env.TF_STATE_BUCKET }}-${AWS_ACCOUNT_ID}"
           
-          # Create backend configuration
+          # Create S3 backend configuration
           cat > backend.tf << EOF
           terraform {
             backend "s3" {
@@ -312,7 +322,7 @@ jobs:
           }
           EOF
           
-          echo "✅ Backend configuration created"
+          echo "✅ S3 backend configuration created for teardown"
 
       - name: Terraform Init
         working-directory: terraform
@@ -334,6 +344,23 @@ jobs:
           fi
           
           echo "✅ Terraform destroy completed"
+
+      - name: Restore Original Terraform Configuration
+        working-directory: terraform
+        if: always()
+        run: |
+          echo "🔄 Restoring original Terraform configuration..."
+          
+          # Remove CI/CD backend configuration
+          rm -f backend.tf
+          
+          # Restore original main.tf if we backed it up
+          if [ -f main.tf.backup ]; then
+            mv main.tf.backup main.tf
+            echo "✅ Original main.tf restored"
+          fi
+          
+          echo "✅ Terraform configuration restored for local development"
 
       - name: Clean Terraform State Bucket
         run: |
