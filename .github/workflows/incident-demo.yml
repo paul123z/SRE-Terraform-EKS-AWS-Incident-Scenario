@@ -219,21 +219,21 @@ jobs:
           echo "incident-id=$INCIDENT_ID" >> $GITHUB_OUTPUT
           
           # Create incident log directory
-          mkdir -p /tmp/incident-logs/$INCIDENT_ID
+          mkdir -p /tmp/incident-logs
           
-          # Start incident logging
-          echo "=== INCIDENT SIMULATION LOG ===" > /tmp/incident-logs/$INCIDENT_ID/incident.log
-          echo "Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
-          echo "Incident ID: $INCIDENT_ID" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
-          echo "Incident Type: $INCIDENT_TYPE" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
-          echo "Duration: $DURATION minutes" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
-          echo "Service URL: http://$SERVICE_URL" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
-          echo "" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
+          # Start incident logging (create log file in expected format)
+          echo "=== INCIDENT SIMULATION LOG ===" > /tmp/incident-logs/incident-$INCIDENT_ID.log
+          echo "Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> /tmp/incident-logs/incident-$INCIDENT_ID.log
+          echo "Incident ID: $INCIDENT_ID" >> /tmp/incident-logs/incident-$INCIDENT_ID.log
+          echo "Incident Type: $INCIDENT_TYPE" >> /tmp/incident-logs/incident-$INCIDENT_ID.log
+          echo "Duration: $DURATION minutes" >> /tmp/incident-logs/incident-$INCIDENT_ID.log
+          echo "Service URL: http://$SERVICE_URL" >> /tmp/incident-logs/incident-$INCIDENT_ID.log
+          echo "" >> /tmp/incident-logs/incident-$INCIDENT_ID.log
           
           # Function to trigger incident
           trigger_incident() {
             local type=$1
-            echo "🚨 Triggering $type incident..." >> /tmp/incident-logs/$INCIDENT_ID/incident.log
+            echo "🚨 Triggering $type incident..." >> /tmp/incident-logs/incident-$INCIDENT_ID.log
             
             case $type in
               "memory_leak")
@@ -241,75 +241,75 @@ jobs:
                 curl -X POST "http://$SERVICE_URL/api/memory-leak" \
                   -H "Content-Type: application/json" \
                   -d '{"enable": true}' \
-                  >> /tmp/incident-logs/$INCIDENT_ID/incident.log 2>&1
+                  >> /tmp/incident-logs/incident-$INCIDENT_ID.log 2>&1
                 ;;
               "cpu_stress")
                 echo "🔥 Enabling CPU stress simulation..."
                 curl -X POST "http://$SERVICE_URL/api/cpu-stress" \
                   -H "Content-Type: application/json" \
                   -d '{"enable": true}' \
-                  >> /tmp/incident-logs/$INCIDENT_ID/incident.log 2>&1
+                  >> /tmp/incident-logs/incident-$INCIDENT_ID.log 2>&1
                 ;;
               "health_failure")
                 echo "💔 Enabling health failure simulation..."
                 curl -X POST "http://$SERVICE_URL/api/failure-mode" \
                   -H "Content-Type: application/json" \
                   -d '{"mode": "health_failure"}' \
-                  >> /tmp/incident-logs/$INCIDENT_ID/incident.log 2>&1
+                  >> /tmp/incident-logs/incident-$INCIDENT_ID.log 2>&1
                 ;;
             esac
           }
           
           # Function to stop incident
           stop_incident() {
-            echo "🛑 Stopping incident simulation..." >> /tmp/incident-logs/$INCIDENT_ID/incident.log
+            echo "🛑 Stopping incident simulation..." >> /tmp/incident-logs/incident-$INCIDENT_ID.log
             
             # Stop all simulations
             curl -X POST "http://$SERVICE_URL/api/memory-leak" \
               -H "Content-Type: application/json" \
               -d '{"enable": false}' \
-              >> /tmp/incident-logs/$INCIDENT_ID/incident.log 2>&1
+              >> /tmp/incident-logs/incident-$INCIDENT_ID.log 2>&1
             
             curl -X POST "http://$SERVICE_URL/api/cpu-stress" \
               -H "Content-Type: application/json" \
               -d '{"enable": false}' \
-              >> /tmp/incident-logs/$INCIDENT_ID/incident.log 2>&1
+              >> /tmp/incident-logs/incident-$INCIDENT_ID.log 2>&1
             
             curl -X POST "http://$SERVICE_URL/api/failure-mode" \
               -H "Content-Type: application/json" \
               -d '{"mode": "none"}' \
-              >> /tmp/incident-logs/$INCIDENT_ID/incident.log 2>&1
+              >> /tmp/incident-logs/incident-$INCIDENT_ID.log 2>&1
           }
           
           # Function to collect metrics
           collect_metrics() {
             local timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-            echo "📊 Collecting metrics at $timestamp..." >> /tmp/incident-logs/$INCIDENT_ID/incident.log
+            echo "📊 Collecting metrics at $timestamp..." >> /tmp/incident-logs/incident-$INCIDENT_ID.log
             
             # Pod status
-            echo "=== POD STATUS ($timestamp) ===" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
-            kubectl get pods -l app.kubernetes.io/name=${{ env.APP_NAME }} -n ${{ env.NAMESPACE }} -o wide >> /tmp/incident-logs/$INCIDENT_ID/incident.log
+            echo "=== POD STATUS ($timestamp) ===" >> /tmp/incident-logs/incident-$INCIDENT_ID.log
+            kubectl get pods -l app.kubernetes.io/name=${{ env.APP_NAME }} -n ${{ env.NAMESPACE }} -o wide >> /tmp/incident-logs/incident-$INCIDENT_ID.log
             
             # Resource usage
-            echo "=== RESOURCE USAGE ($timestamp) ===" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
-            kubectl top pods -l app.kubernetes.io/name=${{ env.APP_NAME }} -n ${{ env.NAMESPACE }} >> /tmp/incident-logs/$INCIDENT_ID/incident.log 2>&1 || echo "Metrics server not available" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
+            echo "=== RESOURCE USAGE ($timestamp) ===" >> /tmp/incident-logs/incident-$INCIDENT_ID.log
+            kubectl top pods -l app.kubernetes.io/name=${{ env.APP_NAME }} -n ${{ env.NAMESPACE }} >> /tmp/incident-logs/incident-$INCIDENT_ID.log 2>&1 || echo "Metrics server not available" >> /tmp/incident-logs/incident-$INCIDENT_ID.log
             
             # Recent events
-            echo "=== RECENT EVENTS ($timestamp) ===" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
-            kubectl get events --sort-by='.lastTimestamp' -n ${{ env.NAMESPACE }} --field-selector involvedObject.name=${{ env.APP_NAME }} | tail -10 >> /tmp/incident-logs/$INCIDENT_ID/incident.log 2>&1
+            echo "=== RECENT EVENTS ($timestamp) ===" >> /tmp/incident-logs/incident-$INCIDENT_ID.log
+            kubectl get events --sort-by='.lastTimestamp' -n ${{ env.NAMESPACE }} --field-selector involvedObject.name=${{ env.APP_NAME }} | tail -10 >> /tmp/incident-logs/incident-$INCIDENT_ID.log 2>&1
             
             # Application health
-            echo "=== APPLICATION HEALTH ($timestamp) ===" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
-            curl -s --max-time 5 "http://$SERVICE_URL/health" >> /tmp/incident-logs/$INCIDENT_ID/incident.log 2>&1 || echo "Health check failed" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
+            echo "=== APPLICATION HEALTH ($timestamp) ===" >> /tmp/incident-logs/incident-$INCIDENT_ID.log
+            curl -s --max-time 5 "http://$SERVICE_URL/health" >> /tmp/incident-logs/incident-$INCIDENT_ID.log 2>&1 || echo "Health check failed" >> /tmp/incident-logs/incident-$INCIDENT_ID.log
             
-            echo "" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
+            echo "" >> /tmp/incident-logs/incident-$INCIDENT_ID.log
           }
           
           # Trigger incidents based on type
           if [ "$INCIDENT_TYPE" = "all_scenarios" ]; then
             echo "🎭 Running all incident scenarios..."
             for scenario in "memory_leak" "cpu_stress" "health_failure"; do
-              echo "--- Starting $scenario scenario ---" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
+              echo "--- Starting $scenario scenario ---" >> /tmp/incident-logs/incident-$INCIDENT_ID.log
               trigger_incident $scenario
               sleep 30
               collect_metrics
@@ -440,7 +440,7 @@ jobs:
             export LOG_DIR="/tmp/incident-logs"
             
             # Run analysis
-            ./scripts/analyze-incident-bedrock.sh || echo "⚠️ AI analysis failed, but continuing..."
+            ./scripts/analyze-incident-bedrock.sh "$INCIDENT_ID" || echo "⚠️ AI analysis failed, but continuing..."
             
             # Check if results were generated
             if [ -f "bedrock-analysis/bedrock_response_*.json" ]; then
