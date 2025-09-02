@@ -209,7 +209,7 @@ jobs:
           SERVICE_URL="${{ needs.pre-checks.outputs.service-url }}"
           INCIDENT_TYPE="${{ inputs.incident_type }}"
           DURATION="${{ inputs.duration }}"
-          INCIDENT_ID="gh-incident-$(date +%Y%m%d-%H%M%S)"
+          INCIDENT_ID="${{ needs.baseline-metrics.outputs.incident-id }}"
           
           echo "🆔 Incident ID: $INCIDENT_ID"
           echo "🎯 Incident Type: $INCIDENT_TYPE"
@@ -385,10 +385,31 @@ jobs:
             }'
           fi
           
-          # Upload logs
-          aws s3 cp /tmp/incident-logs/incident-$INCIDENT_ID.log s3://$S3_BUCKET/incidents/$INCIDENT_ID/incident.log
-          aws s3 cp /tmp/incident-logs/baseline-$INCIDENT_ID.log s3://$S3_BUCKET/incidents/$INCIDENT_ID/baseline.log
-          aws s3 cp /tmp/incident-logs/pod-logs-$INCIDENT_ID.log s3://$S3_BUCKET/incidents/$INCIDENT_ID/pod-logs.log
+          # Upload logs (check files exist first)
+          echo "🔍 Checking available log files..."
+          ls -la /tmp/incident-logs/ || echo "No log files found"
+          
+          echo "📤 Uploading logs to S3..."
+          if [ -f "/tmp/incident-logs/incident-$INCIDENT_ID.log" ]; then
+            aws s3 cp /tmp/incident-logs/incident-$INCIDENT_ID.log s3://$S3_BUCKET/incidents/$INCIDENT_ID/incident.log
+            echo "✅ Incident log uploaded"
+          else
+            echo "⚠️ Incident log not found: /tmp/incident-logs/incident-$INCIDENT_ID.log"
+          fi
+          
+          if [ -f "/tmp/incident-logs/baseline-$INCIDENT_ID.log" ]; then
+            aws s3 cp /tmp/incident-logs/baseline-$INCIDENT_ID.log s3://$S3_BUCKET/incidents/$INCIDENT_ID/baseline.log
+            echo "✅ Baseline log uploaded"
+          else
+            echo "⚠️ Baseline log not found: /tmp/incident-logs/baseline-$INCIDENT_ID.log"
+          fi
+          
+          if [ -f "/tmp/incident-logs/pod-logs-$INCIDENT_ID.log" ]; then
+            aws s3 cp /tmp/incident-logs/pod-logs-$INCIDENT_ID.log s3://$S3_BUCKET/incidents/$INCIDENT_ID/pod-logs.log
+            echo "✅ Pod logs uploaded"
+          else
+            echo "⚠️ Pod logs not found: /tmp/incident-logs/pod-logs-$INCIDENT_ID.log"
+          fi
           
           # Generate S3 URLs for AI analysis
           S3_INCIDENT_URL="https://$S3_BUCKET.s3.${{ env.AWS_REGION }}.amazonaws.com/incidents/$INCIDENT_ID/incident.log"
