@@ -1,331 +1,255 @@
-# 🔄 GitHub Actions Workflows
+# 🚀 Automated SRE Workflows
 
-This directory contains GitHub Actions workflows for the SRE Demo project. All workflows are configured for **manual execution only** to provide full control over when deployments happen.
+This directory contains GitHub Actions workflows that fully automate your SRE infrastructure deployment, incident simulation, and teardown processes. These workflows replace the need for local script execution while maintaining security best practices.
 
 ## 📋 Available Workflows
 
-### **1. `deploy.yml` - Full Application Deployment**
-**Purpose**: Complete application deployment to existing EKS infrastructure.
+### 1. 🚀 `deploy.yml` - Deploy SRE Infrastructure & Application
+**Purpose**: Complete infrastructure and application deployment
+**Replaces**: `deploy.sh` script
 
-**Trigger**: Manual (`workflow_dispatch`)
+**Features**:
+- ✅ S3 backend for Terraform state (secure, versioned)
+- ✅ Automatic AWS resource provisioning
+- ✅ Docker image build and ECR push
+- ✅ Kubernetes application deployment
+- ✅ Monitoring stack setup (Prometheus/Grafana)
+- ✅ Kubernetes Dashboard installation
+- ✅ Comprehensive verification
 
-**What it does**:
-- ✅ **Testing**: Runs Node.js application tests
-- ✅ **Building**: Builds Docker image from `app/` directory
-- ✅ **Pushing**: Pushes image to ECR with `latest` tag
-- ✅ **Deploying**: Deploys application using Helm charts
-- ✅ **Monitoring**: Installs Prometheus, Grafana, Metrics Server
-- ✅ **Verification**: Checks deployment status and health
+**Inputs**:
+- `environment`: Choose deployment environment (demo/staging)
+- `skip_monitoring`: Skip monitoring setup for faster deployment
 
-**Use case**: Application deployment after infrastructure is already provisioned.
+**Duration**: ~20-30 minutes
 
-**Prerequisites**: EKS cluster and infrastructure must be deployed via local Terraform.
+### 2. 🚨 `incident-demo.yml` - Incident Simulation Demo
+**Purpose**: Simulate and analyze production incidents
+**Replaces**: `incident-demo.sh` script
 
-**Estimated runtime**: 10-15 minutes
+**Features**:
+- ✅ Multiple incident types (memory leak, CPU stress, health failure)
+- ✅ Real-time metrics collection
+- ✅ AI-powered incident analysis with AWS Bedrock
+- ✅ Automatic log capture and S3 upload
+- ✅ Comprehensive incident reporting
 
-**Required secrets**:
-- `AWS_ACCESS_KEY_ID`
-- `AWS_SECRET_ACCESS_KEY`
+**Inputs**:
+- `incident_type`: Type of incident to simulate
+- `duration`: Duration in minutes
+- `enable_ai_analysis`: Enable AI analysis with Claude Sonnet 4
 
----
+**Duration**: ~5-15 minutes (depending on duration)
 
-### **2. `build-push-deploy-app.yml` - Build, Push & Deploy Application**
-**Purpose**: Build a new Docker image and deploy the application (infrastructure must already exist).
+### 3. 🧹 `teardown.yml` - Teardown Infrastructure
+**Purpose**: Safely destroy all AWS resources
+**Replaces**: `teardown.sh` script
 
-**Trigger**: Manual (`workflow_dispatch`)
+**Features**:
+- ✅ Safety confirmation required ("DESTROY")
+- ✅ Pre-teardown backup creation
+- ✅ Kubernetes resource cleanup
+- ✅ AWS resource destruction
+- ✅ S3 and DynamoDB cleanup
+- ✅ Cost impact reporting
 
-**What it does**:
-- ✅ **Building**: Builds Docker image from `app/` directory
-- ✅ **Tagging**: Tags with both `latest` and commit SHA
-- ✅ **Pushing**: Pushes images to ECR
-- ✅ **Deploying**: Deploys application using Helm
-- ✅ **Verification**: Checks deployment status and health
-- ✅ **Reporting**: Shows service URLs and next steps
+**Inputs**:
+- `confirm_destroy`: Must type "DESTROY" to proceed
+- `skip_verification`: Skip post-teardown verification
+- `force_destroy`: Force destroy (ignore errors)
 
-**Use case**: When you've updated application code and want to deploy the changes.
+**Duration**: ~10-20 minutes
 
-**Estimated runtime**: 5-10 minutes
+### 4. ✅ `teardown-verify.yml` - Verify Teardown Completion
+**Purpose**: Verify all resources are properly cleaned up
+**Replaces**: `teardown-verify.sh` script
 
-**Required secrets**:
-- `AWS_ACCESS_KEY_ID`
-- `AWS_SECRET_ACCESS_KEY`
+**Features**:
+- ✅ Core resource verification (EKS, ECR, VPC)
+- ✅ Detailed resource checking
+- ✅ Billing impact assessment
+- ✅ Auto-cleanup option
+- ✅ Comprehensive reporting
 
-**Prerequisites**: EKS cluster and infrastructure must already be deployed.
+**Inputs**:
+- `detailed_check`: Perform detailed resource verification
+- `check_billing`: Check for potential billing impact
+- `auto_cleanup`: Attempt to clean up remaining resources
 
----
+**Duration**: ~3-5 minutes
 
-### **3. `deploy-app-only.yml` - Application Deployment Only**
-**Purpose**: Deploy an existing Docker image from ECR (no building).
+## 🔒 Security Features
 
-**Trigger**: Manual (`workflow_dispatch`)
+### **State Management**
+- ✅ **S3 Backend**: Terraform state stored securely in S3
+- ✅ **Encryption**: Server-side encryption enabled
+- ✅ **Versioning**: State file versioning for rollback
+- ✅ **Locking**: DynamoDB table for state locking
 
-**What it does**:
-- ✅ **Deploying**: Deploys existing image using Helm
-- ✅ **Verification**: Checks deployment status
-- ✅ **Reporting**: Shows service URL and pod status
+### **Secrets Protection**
+- ✅ **GitHub Secrets**: AWS credentials stored securely
+- ✅ **No Hardcoding**: No sensitive data in workflow files
+- ✅ **Masked Outputs**: Sensitive values automatically masked
+- ✅ **Public Safe**: All workflows safe for public repositories
 
-**Use case**: When you want to redeploy the same image (e.g., after configuration changes).
+### **Access Control**
+- ✅ **Manual Triggers**: All workflows require manual execution
+- ✅ **Confirmation**: Destruction requires explicit confirmation
+- ✅ **Audit Trail**: Complete execution history in GitHub
 
-**Estimated runtime**: 3-5 minutes
+## 🚀 Quick Start Guide
 
-**Required secrets**:
-- `AWS_ACCESS_KEY_ID`
-- `AWS_SECRET_ACCESS_KEY`
+### **Prerequisites**
+1. **GitHub Secrets**: Configure `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`
+2. **AWS Permissions**: Admin access or equivalent permissions
+3. **Public Repository**: Workflows designed for public repos
 
-**Prerequisites**: EKS cluster and Docker image must already exist in ECR.
+### **Deployment Workflow**
+1. Go to **Actions** → **Deploy SRE Infrastructure & Application**
+2. Click **Run workflow**
+3. Select environment and options
+4. Wait for completion (~20-30 minutes)
+5. Access your application via the provided URL
 
----
+### **Incident Simulation Workflow**
+1. Ensure infrastructure is deployed
+2. Go to **Actions** → **Incident Simulation Demo**
+3. Click **Run workflow**
+4. Select incident type and duration
+5. Monitor results and download artifacts
 
-### **4. `analyze-s3-logs.yml` - S3 Log Analysis with Bedrock**
-**Purpose**: AI-powered incident log analysis using AWS Bedrock (Claude Sonnet 4).
+### **Teardown Workflow**
+1. Go to **Actions** → **Teardown Infrastructure**
+2. Click **Run workflow**
+3. Type "DESTROY" in the confirmation field
+4. Wait for completion (~10-20 minutes)
+5. Verify with teardown-verify workflow if needed
 
-**Trigger**: Manual (`workflow_dispatch`)
+## 📊 Workflow Architecture
 
-**What it does**:
-- ✅ **S3 Download**: Retrieves log files from S3 bucket
-- ✅ **AI Analysis**: Uses AWS Bedrock for intelligent incident analysis
-- ✅ **Structured Output**: Provides formatted incident summary, root cause, and recommendations
-- ✅ **Artifacts**: Saves analysis results for 7-day retention
-- ✅ **Full Response**: Displays complete Bedrock response for debugging
-
-**Use case**: Analyze incident logs stored in S3 after running incident demos.
-
-**Estimated runtime**: 30-60 seconds
-
-**Required secrets**:
-- `AWS_ACCESS_KEY_ID`
-- `AWS_SECRET_ACCESS_KEY`
-
-**Prerequisites**: S3 bucket with incident logs, AWS Bedrock access enabled.
-
-**Input**: S3 Object URL (HTTPS or S3 URI format)
-
----
-
-## 🚀 How to Use
-
-### **Infrastructure Setup (Local Terraform Only)**
-
-**Important**: Infrastructure provisioning is done **locally only** to maintain state file security.
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/paul123z/SRE-Terraform-EKS-AWS-Incident-Scenario.git
-cd SRE-Terraform-EKS-AWS-Incident-Scenario
-
-# 2. Deploy infrastructure locally
-cd terraform
-terraform init
-terraform plan
-terraform apply
-
-# 3. Configure kubectl
-aws eks update-kubeconfig --region eu-central-1 --name sre-incident-demo-cluster
-
-# 4. Verify infrastructure
-kubectl get nodes
+```mermaid
+graph TD
+    A[deploy.yml] --> B[Infrastructure Ready]
+    B --> C[incident-demo.yml]
+    C --> D[Incident Analysis]
+    D --> E[teardown.yml]
+    E --> F[teardown-verify.yml]
+    F --> G[Clean Environment]
+    
+    A --> A1[Setup S3 Backend]
+    A --> A2[Deploy Infrastructure]
+    A --> A3[Build & Push App]
+    A --> A4[Deploy Application]
+    A --> A5[Setup Monitoring]
+    
+    C --> C1[Pre-checks]
+    C --> C2[Baseline Metrics]
+    C --> C3[Simulate Incident]
+    C --> C4[AI Analysis]
+    
+    E --> E1[Confirm Destruction]
+    E --> E2[Remove K8s Resources]
+    E --> E3[Remove AWS Resources]
+    E --> E4[Verify Cleanup]
 ```
 
-**Why local Terraform only?**
-- ✅ **State file security**: No sensitive data in cloud
-- ✅ **Cost control**: Full control over infrastructure lifecycle
-- ✅ **No state file issues**: State stays on your machine
-- ✅ **Easy cleanup**: Simple `terraform destroy` command
+## 💰 Cost Management
 
-### **Application Deployment (GitHub Actions)**
+### **Estimated Costs**
+- **Running Infrastructure**: ~$4-15/day (~$120-450/month)
+- **Deployment**: ~$0.50 per deployment
+- **Incident Simulation**: ~$0.10 per simulation
+- **Teardown**: ~$0.20 per teardown
 
-After infrastructure is deployed locally, use GitHub Actions for application deployment:
+### **Cost Optimization**
+- ✅ **Automatic Teardown**: Prevents forgotten resources
+- ✅ **Resource Verification**: Ensures complete cleanup
+- ✅ **Cost Reporting**: Shows estimated savings
+- ✅ **Efficient Workflows**: Optimized resource usage
 
-1. **Go to your GitHub repository**
-2. **Navigate to Actions tab**
-3. **Select the desired workflow**
-4. **Click "Run workflow"**
-5. **Wait for completion**
-
-### **Workflow Selection Guide**
-
-| Scenario | Use This Workflow | When |
-|----------|------------------|------|
-| **First time setup** | Local Terraform + `deploy.yml` | Infrastructure + Application |
-| **Code changes** | `build-push-deploy-app.yml` | After updating application code |
-| **Redeploy same image** | `deploy-app-only.yml` | Configuration changes only |
-| **Complete rebuild** | `deploy.yml` | Full application refresh |
-
----
-
-## 🔧 Configuration
-
-### **Environment Variables**
-
-All workflows use these environment variables:
-```yaml
-AWS_REGION: eu-central-1
-CLUSTER_NAME: sre-incident-demo-cluster
-APP_NAME: sre-demo-app
-ECR_REPOSITORY: sre-demo-app
-```
-
-### **Required GitHub Secrets**
-
-You must configure these secrets in your repository:
-
-1. **Go to Settings → Secrets and variables → Actions**
-2. **Add the following secrets**:
-
-| Secret Name | Description | Example |
-|-------------|-------------|---------|
-| `AWS_ACCESS_KEY_ID` | AWS access key | `AKIA...` |
-| `AWS_SECRET_ACCESS_KEY` | AWS secret key | `wJalrXUtnFEMI...` |
-
-### **AWS Permissions Required**
-
-Your AWS credentials need these permissions:
-- **EKS**: Create, delete, and manage clusters
-- **ECR**: Create repositories and push images
-- **EC2**: Manage instances, VPC, and networking
-- **IAM**: Create and manage roles and policies
-- **ELB**: Create and manage load balancers
-
----
-
-## 📊 Workflow Outputs
-
-### **Successful Deployment Output**
-
-After a successful workflow run, you'll see:
-
-```
-✅ Application deployed successfully!
-
-🐳 Docker Images:
-- Latest: 123456789012.dkr.ecr.eu-central-1.amazonaws.com/sre-demo-app:latest
-- Tagged: 123456789012.dkr.ecr.eu-central-1.amazonaws.com/sre-demo-app:abc123
-
-🌐 Service URL:
-http://a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6-1234567890.eu-central-1.elb.amazonaws.com
-
-📊 Pod status:
-NAME                            READY   STATUS    RESTARTS   AGE
-sre-demo-app-678c44fb5-n5fs7    1/1     Running   0          2m
-
-🔍 Application health:
-{"status":"healthy","timestamp":"2025-08-05T22:00:00.000Z"}
-
-📈 Resource usage:
-NAME                            CPU(cores)   MEMORY(bytes)   
-sre-demo-app-678c44fb5-n5fs7    1m           19Mi
-```
-
-### **Next Steps After Deployment**
-
-1. **Test the application**: Visit the service URL
-2. **Run incident demo**: Use `./scripts/incident-demo.sh`
-3. **Access Grafana**: `kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80`
-4. **Monitor logs**: `kubectl logs -l app.kubernetes.io/name=sre-demo-app`
-
----
-
-## 🔍 Troubleshooting
+## 🔧 Troubleshooting
 
 ### **Common Issues**
 
-#### **Workflow Fails with "Credentials could not be loaded"**
-- **Solution**: Check that `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` secrets are configured
-- **Verify**: Go to Settings → Secrets and variables → Actions
+#### **Workflow Fails to Start**
+- Check GitHub Secrets are configured
+- Verify AWS credentials have required permissions
+- Ensure repository is public or has GitHub Actions enabled
 
-#### **Workflow Fails with "No such file or directory"**
-- **Solution**: Ensure all required files exist in the repository
-- **Check**: `app/Dockerfile`, `helm/sre-demo-app/`, `terraform/`
+#### **Terraform Backend Issues**
+- S3 bucket and DynamoDB table are created automatically
+- If backend init fails, check AWS permissions
+- State bucket is unique per GitHub user/org
 
-#### **Workflow Fails with "Cluster not found"**
-- **Solution**: Run `deploy.yml` first to create infrastructure
-- **Alternative**: Use `deploy-app-only.yml` if cluster exists
+#### **Deployment Timeouts**
+- EKS cluster creation can take 10-15 minutes
+- Monitoring stack installation can take 15-20 minutes
+- Increase timeout values if needed
 
-#### **Workflow Fails with "Image pull failed"**
-- **Solution**: Use `build-push-deploy-app.yml` to build and push a new image
-- **Check**: Ensure ECR repository exists and is accessible
+#### **Teardown Incomplete**
+- Run `teardown-verify.yml` to check remaining resources
+- Use auto-cleanup option for stuck resources
+- Manual cleanup may be needed for some resources
 
-### **Debugging Commands**
-
-If you need to debug locally:
-
-```bash
-# Check cluster status
-aws eks describe-cluster --name sre-incident-demo-cluster --region eu-central-1
-
-# Check ECR repository
-aws ecr describe-repositories --repository-names sre-demo-app --region eu-central-1
-
-# Check application status
-kubectl get pods -l app.kubernetes.io/name=sre-demo-app
-
-# Check service status
-kubectl get svc sre-demo-app
-```
-
----
-
-## 🔄 Workflow Comparison
-
-| Feature | `deploy.yml` | `build-push-deploy-app.yml` | `deploy-app-only.yml` |
-|---------|--------------|------------------------------|----------------------|
-| **Infrastructure** | ✅ Creates | ❌ Requires existing | ❌ Requires existing |
-| **Building** | ✅ Builds image | ✅ Builds image | ❌ Uses existing |
-| **Pushing** | ✅ Pushes to ECR | ✅ Pushes to ECR | ❌ No pushing |
-| **Deploying** | ✅ Deploys app | ✅ Deploys app | ✅ Deploys app |
-| **Monitoring** | ✅ Installs | ❌ Requires existing | ❌ Requires existing |
-| **Runtime** | 15-20 min | 5-10 min | 3-5 min |
-| **Use case** | Initial setup | Code updates | Redeploy |
-
----
+### **Debug Steps**
+1. **Check Workflow Logs**: Detailed logs available in GitHub Actions
+2. **Verify AWS Console**: Check resources in AWS Console
+3. **Run Verification**: Use teardown-verify workflow
+4. **Check Billing**: Monitor AWS billing dashboard
 
 ## 🎯 Best Practices
 
-### **When to Use Each Workflow**
+### **Development Workflow**
+1. **Deploy**: Use deploy.yml for environment setup
+2. **Test**: Run incident-demo.yml for testing
+3. **Iterate**: Make changes and redeploy as needed
+4. **Cleanup**: Always run teardown.yml when done
 
-1. **`deploy.yml`**: 
-   - First time setup
-   - Complete environment refresh
-   - After infrastructure changes
+### **Security Practices**
+1. **Rotate Credentials**: Regularly rotate AWS keys
+2. **Monitor Usage**: Check AWS CloudTrail logs
+3. **Limit Permissions**: Use least privilege principle
+4. **Review Workflows**: Regularly review workflow execution
 
-2. **`build-push-deploy-app.yml`**:
-   - After code changes
-   - When you want a new image
-   - Regular deployments
+### **Cost Management**
+1. **Monitor Spending**: Set up AWS Budgets
+2. **Clean Up**: Always teardown when not in use
+3. **Verify Cleanup**: Use teardown-verify workflow
+4. **Track Usage**: Monitor workflow execution frequency
 
-3. **`deploy-app-only.yml`**:
-   - Configuration changes only
-   - Quick redeployments
-   - Testing deployment process
+## 📚 Advanced Usage
 
-### **Workflow Optimization**
+### **Custom Environments**
+- Modify environment variables in workflows
+- Create additional workflow files for different environments
+- Use different AWS accounts for isolation
 
-- **Use manual triggers** to control when deployments happen
-- **Monitor workflow logs** for any issues
-- **Verify deployments** after each workflow run
-- **Clean up resources** when done using `./scripts/teardown.sh`
+### **Extended Monitoring**
+- Add custom Grafana dashboards
+- Configure additional Prometheus metrics
+- Set up alerting rules
 
----
-
-## 📚 Related Documentation
-
-- **Main README**: `../README.md` - Complete project documentation
-- **Scripts README**: `../scripts/README.md` - Local script documentation
-- **Deployment Summary**: `../DEPLOYMENT_SUMMARY.md` - Quick reference
-- **Incident Walkthrough**: `../INCIDENT_DETECTION_RESOLUTION.md` - Demo guide
-
----
+### **CI/CD Integration**
+- Trigger workflows from other repositories
+- Use workflow outputs in downstream processes
+- Implement approval processes for production
 
 ## 🤝 Contributing
 
-When adding new workflows:
+When contributing to workflows:
+1. **Test Thoroughly**: Test all changes in your own AWS account
+2. **Security Review**: Ensure no secrets are exposed
+3. **Documentation**: Update this README for any changes
+4. **Backward Compatibility**: Maintain compatibility with existing usage
 
-1. **Use manual triggers** (`workflow_dispatch`) for control
-2. **Include proper error handling** and verification steps
-3. **Document the workflow** in this README
-4. **Test thoroughly** before committing
-5. **Follow naming conventions** for consistency
+## 📞 Support
+
+For issues with workflows:
+1. **Check Logs**: Review GitHub Actions logs
+2. **Verify Setup**: Ensure prerequisites are met
+3. **Test Locally**: Test components locally if possible
+4. **Open Issue**: Create GitHub issue with detailed information
 
 ---
 
-*Last updated: August 2025* 
+**⚠️ Important**: These workflows create AWS resources that incur costs. Always run the teardown workflow when done to avoid unexpected charges!
