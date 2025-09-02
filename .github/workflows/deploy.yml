@@ -308,9 +308,17 @@ jobs:
           echo "🚀 Deploying application with Helm..."
           cd helm/sre-demo-app
           
+          # Extract repository and tag from image URI
+          IMAGE_URI="${{ needs.build-and-push.outputs.image-uri }}"
+          IMAGE_REPO="${IMAGE_URI%:*}"  # Remove :tag part
+          IMAGE_TAG="${IMAGE_URI##*:}"  # Extract tag part
+          
+          echo "🔍 Image repository: $IMAGE_REPO"
+          echo "🔍 Image tag: $IMAGE_TAG"
+          
           helm upgrade --install ${{ env.APP_NAME }} . \
-            --set image.repository=${{ needs.build-and-push.outputs.image-uri }} \
-            --set image.tag=latest \
+            --set image.repository="$IMAGE_REPO" \
+            --set image.tag="$IMAGE_TAG" \
             --namespace ${{ env.NAMESPACE }} \
             --create-namespace \
             --wait \
