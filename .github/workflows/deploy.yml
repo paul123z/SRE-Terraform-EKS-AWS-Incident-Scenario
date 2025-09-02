@@ -316,6 +316,21 @@ jobs:
           echo "🔍 Image repository: $IMAGE_REPO"
           echo "🔍 Image tag: $IMAGE_TAG"
           
+          # Check for stuck Helm releases and clean them up
+          echo "🔧 Checking for stuck Helm releases..."
+          if helm list -n ${{ env.NAMESPACE }} --pending --short | grep -q "${{ env.APP_NAME }}"; then
+            echo "⚠️ Found stuck Helm release, cleaning up..."
+            helm rollback ${{ env.APP_NAME }} 0 -n ${{ env.NAMESPACE }} || true
+            sleep 5
+          fi
+          
+          # Check if release exists and is in failed state
+          if helm list -n ${{ env.NAMESPACE }} --failed --short | grep -q "${{ env.APP_NAME }}"; then
+            echo "⚠️ Found failed Helm release, cleaning up..."
+            helm uninstall ${{ env.APP_NAME }} -n ${{ env.NAMESPACE }} || true
+            sleep 10
+          fi
+          
           helm upgrade --install ${{ env.APP_NAME }} . \
             --set image.repository="$IMAGE_REPO" \
             --set image.tag="$IMAGE_TAG" \
