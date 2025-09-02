@@ -1,4 +1,4 @@
-name: ✅ Verify Teardown Completion
+name: Verify Teardown Completion
 
 on:
   workflow_dispatch:
