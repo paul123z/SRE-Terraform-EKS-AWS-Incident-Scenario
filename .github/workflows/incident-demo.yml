@@ -453,6 +453,15 @@ jobs:
           echo "🤖 Running AI incident analysis..."
           INCIDENT_ID="${{ needs.simulate-incident.outputs.incident-id }}"
           
+          echo "🔍 Debug: Received incident ID: '$INCIDENT_ID'"
+          if [ -z "$INCIDENT_ID" ]; then
+            echo "❌ ERROR: Incident ID is empty!"
+            echo "Available outputs from simulate-incident job:"
+            echo "  incident-id: '${{ needs.simulate-incident.outputs.incident-id }}'"
+            echo "  logs-uploaded: '${{ needs.simulate-incident.outputs.logs-uploaded }}'"
+            exit 1
+          fi
+          
           # Check if analyze script exists
           if [ -f "scripts/analyze-incident-bedrock.sh" ]; then
             echo "🔍 Using local analysis script..."
@@ -466,7 +475,7 @@ jobs:
             ./scripts/analyze-incident-bedrock.sh "$INCIDENT_ID" || echo "⚠️ AI analysis failed, but continuing..."
             
             # Check if results were generated
-            if [ -f "bedrock-analysis/bedrock_response_*.json" ]; then
+            if ls bedrock-analysis/bedrock_response_*.json 1> /dev/null 2>&1; then
               echo "✅ AI analysis completed successfully"
               
               # Create human-readable summary
@@ -478,8 +487,8 @@ jobs:
               
               # Extract key findings (if possible)
               if command -v jq >/dev/null 2>&1; then
-                LATEST_RESPONSE=$(ls -t bedrock-analysis/bedrock_response_*.json | head -1)
-                if [ -f "$LATEST_RESPONSE" ]; then
+                LATEST_RESPONSE=$(ls -t bedrock-analysis/bedrock_response_*.json 2>/dev/null | head -1)
+                if [ -n "$LATEST_RESPONSE" ] && [ -f "$LATEST_RESPONSE" ]; then
                   echo "### Key Findings" >> /tmp/ai-analysis-summary.md
                   echo "\`\`\`json" >> /tmp/ai-analysis-summary.md
                   jq -r '.content[0].text' "$LATEST_RESPONSE" | head -50 >> /tmp/ai-analysis-summary.md 2>/dev/null || echo "Analysis content available in artifacts" >> /tmp/ai-analysis-summary.md
