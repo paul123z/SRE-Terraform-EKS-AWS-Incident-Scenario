@@ -1,0 +1,482 @@
+name: ✅ Verify Teardown Completion
+
+on:
+  workflow_dispatch:
+    inputs:
+      detailed_check:
+        description: 'Perform detailed resource verification'
+        required: false
+        default: true
+        type: boolean
+      check_billing:
+        description: 'Check for potential billing impact'
+        required: false
+        default: true
+        type: boolean
+      auto_cleanup:
+        description: 'Attempt to clean up remaining resources'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  AWS_REGION: eu-central-1
+  CLUSTER_NAME: sre-incident-demo-cluster
+  ECR_REPOSITORY: sre-demo-app
+  VPC_NAME: sre-incident-demo-vpc
+
+jobs:
+  verify-core-resources:
+    name: 🔍 Verify Core Resources
+    runs-on: ubuntu-latest
+    outputs:
+      eks-status: ${{ steps.eks.outputs.status }}
+      ecr-status: ${{ steps.ecr.outputs.status }}
+      vpc-status: ${{ steps.vpc.outputs.status }}
+      cleanup-needed: ${{ steps.summary.outputs.cleanup-needed }}
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify AWS Credentials
+        run: |
+          echo "🔐 Verifying AWS credentials..."
+          AWS_ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+          AWS_USER=$(aws sts get-caller-identity --query Arn --output text)
+          echo "✅ Connected to AWS Account: $AWS_ACCOUNT"
+          echo "👤 Using credentials: $AWS_USER"
+
+      - name: Check EKS Cluster
+        id: eks
+        run: |
+          echo "🔍 Checking EKS cluster status..."
+          
+          if aws eks describe-cluster --name ${{ env.CLUSTER_NAME }} --region ${{ env.AWS_REGION }} 2>/dev/null; then
+            echo "❌ EKS cluster '${{ env.CLUSTER_NAME }}' still exists"
+            echo "status=exists" >> $GITHUB_OUTPUT
+            
+            # Get cluster details
+            CLUSTER_STATUS=$(aws eks describe-cluster --name ${{ env.CLUSTER_NAME }} --region ${{ env.AWS_REGION }} --query 'cluster.status' --output text)
+            echo "📊 Cluster status: $CLUSTER_STATUS"
+            
+            # Check node groups
+            NODE_GROUPS=$(aws eks list-nodegroups --cluster-name ${{ env.CLUSTER_NAME }} --region ${{ env.AWS_REGION }} --query 'nodegroups' --output text 2>/dev/null || echo "")
+            if [ -n "$NODE_GROUPS" ]; then
+              echo "📊 Node groups found: $NODE_GROUPS"
+            fi
+          else
+            echo "✅ EKS cluster not found (correctly removed)"
+            echo "status=removed" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check ECR Repository
+        id: ecr
+        run: |
+          echo "🔍 Checking ECR repository status..."
+          
+          if aws ecr describe-repositories --repository-names ${{ env.ECR_REPOSITORY }} --region ${{ env.AWS_REGION }} 2>/dev/null; then
+            echo "❌ ECR repository '${{ env.ECR_REPOSITORY }}' still exists"
+            echo "status=exists" >> $GITHUB_OUTPUT
+            
+            # Check for images
+            IMAGE_COUNT=$(aws ecr list-images --repository-name ${{ env.ECR_REPOSITORY }} --region ${{ env.AWS_REGION }} --query 'length(imageIds)' --output text 2>/dev/null || echo "0")
+            echo "📊 Images in repository: $IMAGE_COUNT"
+          else
+            echo "✅ ECR repository not found (correctly removed)"
+            echo "status=removed" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check VPC
+        id: vpc
+        run: |
+          echo "🔍 Checking VPC status..."
+          
+          VPC_IDS=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=${{ env.VPC_NAME }}" --region ${{ env.AWS_REGION }} --query 'Vpcs[].VpcId' --output text 2>/dev/null || echo "")
+          
+          if [ -n "$VPC_IDS" ]; then
+            echo "❌ Project VPC still exists: $VPC_IDS"
+            echo "status=exists" >> $GITHUB_OUTPUT
+            
+            # Get VPC details
+            for vpc_id in $VPC_IDS; do
+              echo "📊 VPC Details for $vpc_id:"
+              aws ec2 describe-vpcs --vpc-ids "$vpc_id" --region ${{ env.AWS_REGION }} --query 'Vpcs[0].[State,CidrBlock]' --output table
+            done
+          else
+            echo "✅ Project VPC not found (correctly removed)"
+            echo "status=removed" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Summary of Core Resources
+        id: summary
+        run: |
+          echo "📊 Core Resources Summary:"
+          echo "- EKS Cluster: ${{ steps.eks.outputs.status }}"
+          echo "- ECR Repository: ${{ steps.ecr.outputs.status }}"
+          echo "- VPC: ${{ steps.vpc.outputs.status }}"
+          
+          if [ "${{ steps.eks.outputs.status }}" = "exists" ] || [ "${{ steps.ecr.outputs.status }}" = "exists" ] || [ "${{ steps.vpc.outputs.status }}" = "exists" ]; then
+            echo "cleanup-needed=true" >> $GITHUB_OUTPUT
+            echo "⚠️ Some core resources still exist - cleanup may be needed"
+          else
+            echo "cleanup-needed=false" >> $GITHUB_OUTPUT
+            echo "✅ All core resources successfully removed"
+          fi
+
+  verify-detailed-resources:
+    name: 🔍 Detailed Resource Verification
+    runs-on: ubuntu-latest
+    if: ${{ inputs.detailed_check }}
+    outputs:
+      load-balancers: ${{ steps.lb.outputs.count }}
+      nat-gateways: ${{ steps.nat.outputs.count }}
+      security-groups: ${{ steps.sg.outputs.count }}
+      iam-roles: ${{ steps.iam.outputs.count }}
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Check Load Balancers
+        id: lb
+        run: |
+          echo "🔍 Checking load balancers..."
+          
+          LBS=$(aws elbv2 describe-load-balancers --region ${{ env.AWS_REGION }} --query 'LoadBalancers[?contains(LoadBalancerName, `sre-`) || contains(LoadBalancerName, `k8s-`)]' --output json 2>/dev/null || echo "[]")
+          LB_COUNT=$(echo "$LBS" | jq length)
+          
+          echo "count=$LB_COUNT" >> $GITHUB_OUTPUT
+          
+          if [ "$LB_COUNT" -gt 0 ]; then
+            echo "⚠️ Found $LB_COUNT load balancer(s) that may be related to the project:"
+            echo "$LBS" | jq -r '.[] | "- \(.LoadBalancerName) (\(.State.Code))"'
+          else
+            echo "✅ No project-related load balancers found"
+          fi
+
+      - name: Check NAT Gateways
+        id: nat
+        run: |
+          echo "🔍 Checking NAT gateways..."
+          
+          NATS=$(aws ec2 describe-nat-gateways --region ${{ env.AWS_REGION }} --filter "Name=state,Values=available,pending,deleting" --query 'NatGateways[?contains(Tags[?Key==`Name`].Value | [0] || ``, `sre-`)]' --output json 2>/dev/null || echo "[]")
+          NAT_COUNT=$(echo "$NATS" | jq length)
+          
+          echo "count=$NAT_COUNT" >> $GITHUB_OUTPUT
+          
+          if [ "$NAT_COUNT" -gt 0 ]; then
+            echo "⚠️ Found $NAT_COUNT NAT gateway(s) that may be related to the project:"
+            echo "$NATS" | jq -r '.[] | "- \(.NatGatewayId) (\(.State))"'
+          else
+            echo "✅ No project-related NAT gateways found"
+          fi
+
+      - name: Check Security Groups
+        id: sg
+        run: |
+          echo "🔍 Checking security groups..."
+          
+          SGS=$(aws ec2 describe-security-groups --region ${{ env.AWS_REGION }} --filters "Name=group-name,Values=*sre-*,*eks-*" --query 'SecurityGroups[?GroupName != `default`]' --output json 2>/dev/null || echo "[]")
+          SG_COUNT=$(echo "$SGS" | jq length)
+          
+          echo "count=$SG_COUNT" >> $GITHUB_OUTPUT
+          
+          if [ "$SG_COUNT" -gt 0 ]; then
+            echo "⚠️ Found $SG_COUNT security group(s) that may be related to the project:"
+            echo "$SGS" | jq -r '.[] | "- \(.GroupId) (\(.GroupName))"'
+          else
+            echo "✅ No project-related security groups found"
+          fi
+
+      - name: Check IAM Roles
+        id: iam
+        run: |
+          echo "🔍 Checking IAM roles..."
+          
+          ROLES=$(aws iam list-roles --query 'Roles[?contains(RoleName, `sre-`) || contains(RoleName, `eks-`) || contains(RoleName, `EKS`)]' --output json 2>/dev/null || echo "[]")
+          ROLE_COUNT=$(echo "$ROLES" | jq length)
+          
+          echo "count=$ROLE_COUNT" >> $GITHUB_OUTPUT
+          
+          if [ "$ROLE_COUNT" -gt 0 ]; then
+            echo "⚠️ Found $ROLE_COUNT IAM role(s) that may be related to the project:"
+            echo "$ROLES" | jq -r '.[] | "- \(.RoleName)"'
+          else
+            echo "✅ No project-related IAM roles found"
+          fi
+
+      - name: Check S3 Buckets
+        run: |
+          echo "🔍 Checking S3 buckets..."
+          
+          AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          
+          # Check for Terraform state bucket
+          STATE_BUCKET="sre-terraform-state-${{ github.repository_owner }}-${AWS_ACCOUNT_ID}"
+          if aws s3api head-bucket --bucket "$STATE_BUCKET" 2>/dev/null; then
+            echo "⚠️ Terraform state bucket still exists: ***MASKED***"
+            OBJECTS=$(aws s3api list-objects-v2 --bucket "$STATE_BUCKET" --query 'Contents[].Key' --output text 2>/dev/null || echo "")
+            if [ -n "$OBJECTS" ]; then
+              echo "📊 Objects in bucket: $OBJECTS"
+            fi
+          else
+            echo "✅ Terraform state bucket not found"
+          fi
+          
+          # Check for incident logs bucket
+          INCIDENT_BUCKET="sre-incident-demo-incident-logs-${AWS_ACCOUNT_ID}"
+          if aws s3api head-bucket --bucket "$INCIDENT_BUCKET" 2>/dev/null; then
+            echo "⚠️ Incident logs bucket still exists: ***MASKED***"
+            OBJECT_COUNT=$(aws s3api list-objects-v2 --bucket "$INCIDENT_BUCKET" --query 'KeyCount' --output text 2>/dev/null || echo "0")
+            echo "📊 Objects in bucket: $OBJECT_COUNT"
+          else
+            echo "✅ Incident logs bucket not found"
+          fi
+
+      - name: Check DynamoDB Tables
+        run: |
+          echo "🔍 Checking DynamoDB tables..."
+          
+          if aws dynamodb describe-table --table-name sre-terraform-locks --region ${{ env.AWS_REGION }} 2>/dev/null; then
+            echo "⚠️ Terraform locks table still exists"
+            TABLE_STATUS=$(aws dynamodb describe-table --table-name sre-terraform-locks --region ${{ env.AWS_REGION }} --query 'Table.TableStatus' --output text)
+            echo "📊 Table status: $TABLE_STATUS"
+          else
+            echo "✅ Terraform locks table not found"
+          fi
+
+  check-billing-impact:
+    name: 💰 Check Billing Impact
+    runs-on: ubuntu-latest
+    if: ${{ inputs.check_billing }}
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Check Running EC2 Instances
+        run: |
+          echo "💰 Checking for running EC2 instances..."
+          
+          INSTANCES=$(aws ec2 describe-instances --region ${{ env.AWS_REGION }} --filters "Name=instance-state-name,Values=running,pending" --query 'Reservations[].Instances[?contains(Tags[?Key==`Name`].Value | [0] || ``, `sre-`) || contains(Tags[?Key==`kubernetes.io/cluster/sre-incident-demo-cluster`].Value | [0] || ``, `owned`)]' --output json 2>/dev/null || echo "[]")
+          INSTANCE_COUNT=$(echo "$INSTANCES" | jq length)
+          
+          if [ "$INSTANCE_COUNT" -gt 0 ]; then
+            echo "💸 Found $INSTANCE_COUNT running instance(s) that may incur charges:"
+            echo "$INSTANCES" | jq -r '.[] | "- \(.InstanceId) (\(.InstanceType)) - \(.State.Name)"'
+          else
+            echo "✅ No project-related running instances found"
+          fi
+
+      - name: Check EBS Volumes
+        run: |
+          echo "💰 Checking for EBS volumes..."
+          
+          VOLUMES=$(aws ec2 describe-volumes --region ${{ env.AWS_REGION }} --filters "Name=status,Values=available,in-use" --query 'Volumes[?contains(Tags[?Key==`Name`].Value | [0] || ``, `sre-`) || contains(Tags[?Key==`kubernetes.io/cluster/sre-incident-demo-cluster`].Value | [0] || ``, `owned`)]' --output json 2>/dev/null || echo "[]")
+          VOLUME_COUNT=$(echo "$VOLUMES" | jq length)
+          
+          if [ "$VOLUME_COUNT" -gt 0 ]; then
+            echo "💸 Found $VOLUME_COUNT EBS volume(s) that may incur charges:"
+            echo "$VOLUMES" | jq -r '.[] | "- \(.VolumeId) (\(.Size)GB) - \(.State)"'
+          else
+            echo "✅ No project-related EBS volumes found"
+          fi
+
+      - name: Estimate Cost Savings
+        run: |
+          echo "💰 Estimated monthly cost savings from teardown:"
+          echo "- EKS Cluster: ~$75/month"
+          echo "- EC2 Instances (2x t3.medium): ~$60/month"
+          echo "- NAT Gateway: ~$45/month"
+          echo "- EBS Storage: ~$10/month"
+          echo "- Load Balancer: ~$20/month"
+          echo "- Total estimated savings: ~$210/month"
+          echo ""
+          echo "💡 Actual costs depend on usage patterns and region"
+
+  auto-cleanup:
+    name: 🧹 Auto Cleanup Remaining Resources
+    runs-on: ubuntu-latest
+    needs: [verify-core-resources, verify-detailed-resources]
+    if: ${{ inputs.auto_cleanup && needs.verify-core-resources.outputs.cleanup-needed == 'true' }}
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Warning
+        run: |
+          echo "⚠️ AUTO-CLEANUP ENABLED"
+          echo "This will attempt to force-delete remaining resources"
+          echo "Waiting 10 seconds before proceeding..."
+          sleep 10
+
+      - name: Force Delete ECR Repository
+        if: ${{ needs.verify-core-resources.outputs.ecr-status == 'exists' }}
+        run: |
+          echo "🗑️ Force deleting ECR repository..."
+          
+          # Delete all images first
+          aws ecr batch-delete-image \
+            --repository-name ${{ env.ECR_REPOSITORY }} \
+            --image-ids imageTag=latest \
+            --region ${{ env.AWS_REGION }} || true
+          
+          # Delete any remaining images
+          IMAGE_IDS=$(aws ecr list-images --repository-name ${{ env.ECR_REPOSITORY }} --region ${{ env.AWS_REGION }} --query 'imageIds[*]' --output json 2>/dev/null || echo "[]")
+          if [ "$IMAGE_IDS" != "[]" ]; then
+            aws ecr batch-delete-image \
+              --repository-name ${{ env.ECR_REPOSITORY }} \
+              --image-ids "$IMAGE_IDS" \
+              --region ${{ env.AWS_REGION }} || true
+          fi
+          
+          # Delete repository
+          aws ecr delete-repository \
+            --repository-name ${{ env.ECR_REPOSITORY }} \
+            --force \
+            --region ${{ env.AWS_REGION }} || true
+          
+          echo "✅ ECR repository cleanup attempted"
+
+      - name: Force Delete EKS Cluster
+        if: ${{ needs.verify-core-resources.outputs.eks-status == 'exists' }}
+        run: |
+          echo "🗑️ Force deleting EKS cluster..."
+          echo "⚠️ This may take 10-15 minutes..."
+          
+          # Delete node groups first
+          NODE_GROUPS=$(aws eks list-nodegroups --cluster-name ${{ env.CLUSTER_NAME }} --region ${{ env.AWS_REGION }} --query 'nodegroups' --output text 2>/dev/null || echo "")
+          for ng in $NODE_GROUPS; do
+            echo "🗑️ Deleting node group: $ng"
+            aws eks delete-nodegroup --cluster-name ${{ env.CLUSTER_NAME }} --nodegroup-name "$ng" --region ${{ env.AWS_REGION }} || true
+          done
+          
+          # Wait for node groups to be deleted
+          for ng in $NODE_GROUPS; do
+            echo "⏳ Waiting for node group $ng to be deleted..."
+            aws eks wait nodegroup-deleted --cluster-name ${{ env.CLUSTER_NAME }} --nodegroup-name "$ng" --region ${{ env.AWS_REGION }} || true
+          done
+          
+          # Delete cluster
+          aws eks delete-cluster --name ${{ env.CLUSTER_NAME }} --region ${{ env.AWS_REGION }} || true
+          
+          echo "✅ EKS cluster deletion initiated (may take time to complete)"
+
+      - name: Clean S3 Buckets
+        run: |
+          echo "🗑️ Cleaning remaining S3 buckets..."
+          
+          AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          
+          # Clean state bucket
+          STATE_BUCKET="sre-terraform-state-${{ github.repository_owner }}-${AWS_ACCOUNT_ID}"
+          if aws s3api head-bucket --bucket "$STATE_BUCKET" 2>/dev/null; then
+            aws s3 rm "s3://$STATE_BUCKET" --recursive || true
+            aws s3api delete-bucket --bucket "$STATE_BUCKET" --region ${{ env.AWS_REGION }} || true
+          fi
+          
+          # Clean incident bucket
+          INCIDENT_BUCKET="sre-incident-demo-incident-logs-${AWS_ACCOUNT_ID}"
+          if aws s3api head-bucket --bucket "$INCIDENT_BUCKET" 2>/dev/null; then
+            aws s3 rm "s3://$INCIDENT_BUCKET" --recursive || true
+            aws s3api delete-bucket --bucket "$INCIDENT_BUCKET" --region ${{ env.AWS_REGION }} || true
+          fi
+          
+          echo "✅ S3 bucket cleanup completed"
+
+  generate-report:
+    name: 📋 Generate Verification Report
+    runs-on: ubuntu-latest
+    needs: [verify-core-resources, verify-detailed-resources, check-billing-impact, auto-cleanup]
+    if: always()
+    steps:
+      - name: Generate Verification Report
+        run: |
+          echo "## 🔍 Teardown Verification Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Verification Date:** $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_STEP_SUMMARY
+          echo "**Region:** ${{ env.AWS_REGION }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### 🎯 Core Resources Status" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ needs.verify-core-resources.outputs.eks-status }}" = "removed" ]; then
+            echo "- ✅ **EKS Cluster:** Successfully removed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ❌ **EKS Cluster:** Still exists" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "${{ needs.verify-core-resources.outputs.ecr-status }}" = "removed" ]; then
+            echo "- ✅ **ECR Repository:** Successfully removed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ❌ **ECR Repository:** Still exists" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "${{ needs.verify-core-resources.outputs.vpc-status }}" = "removed" ]; then
+            echo "- ✅ **VPC:** Successfully removed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ❌ **VPC:** Still exists" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "${{ inputs.detailed_check }}" = "true" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### 🔍 Detailed Resources Status" >> $GITHUB_STEP_SUMMARY
+            echo "- **Load Balancers:** ${{ needs.verify-detailed-resources.outputs.load-balancers || 'N/A' }} found" >> $GITHUB_STEP_SUMMARY
+            echo "- **NAT Gateways:** ${{ needs.verify-detailed-resources.outputs.nat-gateways || 'N/A' }} found" >> $GITHUB_STEP_SUMMARY
+            echo "- **Security Groups:** ${{ needs.verify-detailed-resources.outputs.security-groups || 'N/A' }} found" >> $GITHUB_STEP_SUMMARY
+            echo "- **IAM Roles:** ${{ needs.verify-detailed-resources.outputs.iam-roles || 'N/A' }} found" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 💰 Cost Impact" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ needs.verify-core-resources.outputs.cleanup-needed }}" = "false" ]; then
+            echo "✅ **All core resources removed** - AWS charges should be stopped" >> $GITHUB_STEP_SUMMARY
+            echo "💰 **Estimated monthly savings:** ~$210" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ **Some resources still exist** - may continue to incur charges" >> $GITHUB_STEP_SUMMARY
+            echo "💡 Consider running manual cleanup or the teardown workflow again" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "${{ inputs.auto_cleanup }}" = "true" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### 🧹 Auto-Cleanup Results" >> $GITHUB_STEP_SUMMARY
+            if [ "${{ needs.auto-cleanup.result }}" = "success" ]; then
+              echo "✅ **Auto-cleanup completed successfully**" >> $GITHUB_STEP_SUMMARY
+            elif [ "${{ needs.auto-cleanup.result }}" = "skipped" ]; then
+              echo "⏭️ **Auto-cleanup skipped** (no resources needed cleanup)" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "⚠️ **Auto-cleanup encountered issues**" >> $GITHUB_STEP_SUMMARY
+            fi
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🎯 Recommendations" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ needs.verify-core-resources.outputs.cleanup-needed }}" = "true" ]; then
+            echo "1. **Manual cleanup:** Check AWS Console for remaining resources" >> $GITHUB_STEP_SUMMARY
+            echo "2. **Re-run teardown:** Execute teardown.yml workflow again" >> $GITHUB_STEP_SUMMARY
+            echo "3. **Monitor billing:** Check AWS billing dashboard for unexpected charges" >> $GITHUB_STEP_SUMMARY
+            echo "4. **Contact support:** If resources won't delete, contact AWS support" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ **No action required** - teardown completed successfully" >> $GITHUB_STEP_SUMMARY
+            echo "💡 You can safely run deploy.yml to recreate the environment" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔄 Recreation" >> $GITHUB_STEP_SUMMARY
+          echo "To recreate the environment:" >> $GITHUB_STEP_SUMMARY
+          echo "1. Run **deploy.yml** workflow" >> $GITHUB_STEP_SUMMARY
+          echo "2. Wait for deployment completion (~20-30 minutes)" >> $GITHUB_STEP_SUMMARY
+          echo "3. Test with **incident-demo.yml** workflow" >> $GITHUB_STEP_SUMMARY

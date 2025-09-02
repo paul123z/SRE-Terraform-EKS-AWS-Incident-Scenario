@@ -1,0 +1,516 @@
+name: 🚨 Incident Simulation Demo
+
+on:
+  workflow_dispatch:
+    inputs:
+      incident_type:
+        description: 'Type of incident to simulate'
+        required: true
+        default: 'memory_leak'
+        type: choice
+        options:
+        - memory_leak
+        - cpu_stress
+        - health_failure
+        - all_scenarios
+      duration:
+        description: 'Duration in minutes'
+        required: true
+        default: '3'
+        type: string
+      enable_ai_analysis:
+        description: 'Enable AI incident analysis'
+        required: false
+        default: true
+        type: boolean
+
+env:
+  AWS_REGION: eu-central-1
+  CLUSTER_NAME: sre-incident-demo-cluster
+  APP_NAME: sre-demo-app
+  NAMESPACE: default
+  TF_STATE_BUCKET: sre-terraform-state-${{ github.repository_owner }}
+  TF_STATE_KEY: sre-demo/terraform.tfstate
+
+jobs:
+  pre-checks:
+    name: 🔍 Pre-Flight Checks
+    runs-on: ubuntu-latest
+    outputs:
+      service-url: ${{ steps.service.outputs.service-url }}
+      cluster-status: ${{ steps.cluster.outputs.status }}
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Check EKS Cluster
+        id: cluster
+        run: |
+          echo "🔍 Checking EKS cluster status..."
+          if aws eks describe-cluster --name ${{ env.CLUSTER_NAME }} --region ${{ env.AWS_REGION }} --query 'cluster.status' --output text | grep -q "ACTIVE"; then
+            echo "status=active" >> $GITHUB_OUTPUT
+            echo "✅ EKS cluster is active"
+          else
+            echo "status=inactive" >> $GITHUB_OUTPUT
+            echo "❌ EKS cluster is not active"
+            exit 1
+          fi
+
+      - name: Configure kubectl
+        run: |
+          echo "⚙️ Configuring kubectl..."
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.CLUSTER_NAME }}
+          kubectl cluster-info
+
+      - name: Check Application Status
+        id: service
+        run: |
+          echo "🔍 Checking application status..."
+          
+          # Check if pods are running
+          if ! kubectl get pods -l app.kubernetes.io/name=${{ env.APP_NAME }} -n ${{ env.NAMESPACE }} --no-headers | grep -q "Running"; then
+            echo "❌ Application pods are not running"
+            kubectl get pods -l app.kubernetes.io/name=${{ env.APP_NAME }} -n ${{ env.NAMESPACE }}
+            exit 1
+          fi
+          
+          # Get service URL
+          SERVICE_URL=$(kubectl get svc ${{ env.APP_NAME }} -n ${{ env.NAMESPACE }} -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
+          if [ -z "$SERVICE_URL" ]; then
+            SERVICE_URL=$(kubectl get svc ${{ env.APP_NAME }} -n ${{ env.NAMESPACE }} -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
+          fi
+          
+          if [ -n "$SERVICE_URL" ]; then
+            echo "service-url=$SERVICE_URL" >> $GITHUB_OUTPUT
+            echo "✅ Service URL: http://$SERVICE_URL"
+            
+            # Test application health
+            if curl -s --max-time 10 "http://$SERVICE_URL/health" > /dev/null; then
+              echo "✅ Application is responding"
+            else
+              echo "⚠️ Application may not be fully ready"
+            fi
+          else
+            echo "❌ Service URL not available"
+            exit 1
+          fi
+
+  baseline-metrics:
+    name: 📊 Capture Baseline Metrics
+    runs-on: ubuntu-latest
+    needs: pre-checks
+    outputs:
+      baseline-captured: ${{ steps.metrics.outputs.captured }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.CLUSTER_NAME }}
+
+      - name: Capture Baseline Metrics
+        id: metrics
+        run: |
+          echo "📊 Capturing baseline metrics..."
+          
+          # Create incident directory
+          INCIDENT_ID="gh-incident-$(date +%Y%m%d-%H%M%S)"
+          mkdir -p /tmp/incident-logs/$INCIDENT_ID
+          
+          echo "🆔 Incident ID: $INCIDENT_ID"
+          echo "incident-id=$INCIDENT_ID" >> $GITHUB_OUTPUT
+          
+          # Capture baseline state
+          echo "=== BASELINE METRICS ===" > /tmp/incident-logs/$INCIDENT_ID/baseline.log
+          echo "Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
+          echo "Incident ID: $INCIDENT_ID" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
+          echo "" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
+          
+          # Pod status
+          echo "=== POD STATUS ===" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
+          kubectl get pods -l app.kubernetes.io/name=${{ env.APP_NAME }} -n ${{ env.NAMESPACE }} -o wide >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
+          echo "" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
+          
+          # Resource usage
+          echo "=== RESOURCE USAGE ===" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
+          kubectl top pods -l app.kubernetes.io/name=${{ env.APP_NAME }} -n ${{ env.NAMESPACE }} >> /tmp/incident-logs/$INCIDENT_ID/baseline.log 2>&1 || echo "Metrics server not available" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
+          echo "" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
+          
+          # Service status
+          echo "=== SERVICE STATUS ===" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
+          kubectl get svc ${{ env.APP_NAME }} -n ${{ env.NAMESPACE }} -o wide >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
+          echo "" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
+          
+          # HPA status
+          echo "=== HPA STATUS ===" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
+          kubectl get hpa -n ${{ env.NAMESPACE }} >> /tmp/incident-logs/$INCIDENT_ID/baseline.log 2>&1 || echo "HPA not found" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
+          echo "" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
+          
+          # Application health
+          echo "=== APPLICATION HEALTH ===" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
+          curl -s --max-time 10 "http://${{ needs.pre-checks.outputs.service-url }}/health" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log 2>&1 || echo "Health check failed" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
+          echo "" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
+          
+          echo "captured=true" >> $GITHUB_OUTPUT
+          echo "✅ Baseline metrics captured"
+
+      - name: Upload Baseline Logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: baseline-logs
+          path: /tmp/incident-logs/
+          retention-days: 7
+
+  simulate-incident:
+    name: 🚨 Simulate Incident
+    runs-on: ubuntu-latest
+    needs: [pre-checks, baseline-metrics]
+    outputs:
+      incident-id: ${{ steps.incident.outputs.incident-id }}
+      logs-uploaded: ${{ steps.upload.outputs.logs-uploaded }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.CLUSTER_NAME }}
+
+      - name: Download Baseline Logs
+        uses: actions/download-artifact@v4
+        with:
+          name: baseline-logs
+          path: /tmp/incident-logs/
+
+      - name: Simulate Incident
+        id: incident
+        run: |
+          echo "🚨 Starting incident simulation..."
+          
+          SERVICE_URL="${{ needs.pre-checks.outputs.service-url }}"
+          INCIDENT_TYPE="${{ inputs.incident_type }}"
+          DURATION="${{ inputs.duration }}"
+          INCIDENT_ID="gh-incident-$(date +%Y%m%d-%H%M%S)"
+          
+          echo "🆔 Incident ID: $INCIDENT_ID"
+          echo "🎯 Incident Type: $INCIDENT_TYPE"
+          echo "⏱️ Duration: $DURATION minutes"
+          echo "🌐 Service URL: http://$SERVICE_URL"
+          
+          echo "incident-id=$INCIDENT_ID" >> $GITHUB_OUTPUT
+          
+          # Create incident log directory
+          mkdir -p /tmp/incident-logs/$INCIDENT_ID
+          
+          # Start incident logging
+          echo "=== INCIDENT SIMULATION LOG ===" > /tmp/incident-logs/$INCIDENT_ID/incident.log
+          echo "Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
+          echo "Incident ID: $INCIDENT_ID" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
+          echo "Incident Type: $INCIDENT_TYPE" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
+          echo "Duration: $DURATION minutes" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
+          echo "Service URL: http://$SERVICE_URL" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
+          echo "" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
+          
+          # Function to trigger incident
+          trigger_incident() {
+            local type=$1
+            echo "🚨 Triggering $type incident..." >> /tmp/incident-logs/$INCIDENT_ID/incident.log
+            
+            case $type in
+              "memory_leak")
+                echo "💾 Enabling memory leak simulation..."
+                curl -X POST "http://$SERVICE_URL/api/memory-leak" \
+                  -H "Content-Type: application/json" \
+                  -d '{"enable": true}' \
+                  >> /tmp/incident-logs/$INCIDENT_ID/incident.log 2>&1
+                ;;
+              "cpu_stress")
+                echo "🔥 Enabling CPU stress simulation..."
+                curl -X POST "http://$SERVICE_URL/api/cpu-stress" \
+                  -H "Content-Type: application/json" \
+                  -d '{"enable": true}' \
+                  >> /tmp/incident-logs/$INCIDENT_ID/incident.log 2>&1
+                ;;
+              "health_failure")
+                echo "💔 Enabling health failure simulation..."
+                curl -X POST "http://$SERVICE_URL/api/failure-mode" \
+                  -H "Content-Type: application/json" \
+                  -d '{"mode": "health_failure"}' \
+                  >> /tmp/incident-logs/$INCIDENT_ID/incident.log 2>&1
+                ;;
+            esac
+          }
+          
+          # Function to stop incident
+          stop_incident() {
+            echo "🛑 Stopping incident simulation..." >> /tmp/incident-logs/$INCIDENT_ID/incident.log
+            
+            # Stop all simulations
+            curl -X POST "http://$SERVICE_URL/api/memory-leak" \
+              -H "Content-Type: application/json" \
+              -d '{"enable": false}' \
+              >> /tmp/incident-logs/$INCIDENT_ID/incident.log 2>&1
+            
+            curl -X POST "http://$SERVICE_URL/api/cpu-stress" \
+              -H "Content-Type: application/json" \
+              -d '{"enable": false}' \
+              >> /tmp/incident-logs/$INCIDENT_ID/incident.log 2>&1
+            
+            curl -X POST "http://$SERVICE_URL/api/failure-mode" \
+              -H "Content-Type: application/json" \
+              -d '{"mode": "none"}' \
+              >> /tmp/incident-logs/$INCIDENT_ID/incident.log 2>&1
+          }
+          
+          # Function to collect metrics
+          collect_metrics() {
+            local timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+            echo "📊 Collecting metrics at $timestamp..." >> /tmp/incident-logs/$INCIDENT_ID/incident.log
+            
+            # Pod status
+            echo "=== POD STATUS ($timestamp) ===" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
+            kubectl get pods -l app.kubernetes.io/name=${{ env.APP_NAME }} -n ${{ env.NAMESPACE }} -o wide >> /tmp/incident-logs/$INCIDENT_ID/incident.log
+            
+            # Resource usage
+            echo "=== RESOURCE USAGE ($timestamp) ===" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
+            kubectl top pods -l app.kubernetes.io/name=${{ env.APP_NAME }} -n ${{ env.NAMESPACE }} >> /tmp/incident-logs/$INCIDENT_ID/incident.log 2>&1 || echo "Metrics server not available" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
+            
+            # Recent events
+            echo "=== RECENT EVENTS ($timestamp) ===" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
+            kubectl get events --sort-by='.lastTimestamp' -n ${{ env.NAMESPACE }} --field-selector involvedObject.name=${{ env.APP_NAME }} | tail -10 >> /tmp/incident-logs/$INCIDENT_ID/incident.log 2>&1
+            
+            # Application health
+            echo "=== APPLICATION HEALTH ($timestamp) ===" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
+            curl -s --max-time 5 "http://$SERVICE_URL/health" >> /tmp/incident-logs/$INCIDENT_ID/incident.log 2>&1 || echo "Health check failed" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
+            
+            echo "" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
+          }
+          
+          # Trigger incidents based on type
+          if [ "$INCIDENT_TYPE" = "all_scenarios" ]; then
+            echo "🎭 Running all incident scenarios..."
+            for scenario in "memory_leak" "cpu_stress" "health_failure"; do
+              echo "--- Starting $scenario scenario ---" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
+              trigger_incident $scenario
+              sleep 30
+              collect_metrics
+              stop_incident
+              sleep 10
+            done
+          else
+            trigger_incident $INCIDENT_TYPE
+            
+            # Monitor for specified duration
+            DURATION_SECONDS=$((DURATION * 60))
+            INTERVAL=30
+            ITERATIONS=$((DURATION_SECONDS / INTERVAL))
+            
+            echo "📊 Monitoring for $DURATION minutes (collecting metrics every ${INTERVAL}s)..."
+            for i in $(seq 1 $ITERATIONS); do
+              echo "📊 Metrics collection $i/$ITERATIONS"
+              collect_metrics
+              
+              if [ $i -lt $ITERATIONS ]; then
+                sleep $INTERVAL
+              fi
+            done
+            
+            # Stop the incident
+            stop_incident
+          fi
+          
+          # Final metrics collection
+          echo "📊 Collecting final metrics..."
+          sleep 10
+          collect_metrics
+          
+          echo "✅ Incident simulation completed"
+
+      - name: Collect Pod Logs
+        run: |
+          echo "📋 Collecting pod logs..."
+          INCIDENT_ID="${{ steps.incident.outputs.incident-id }}"
+          
+          # Get pod logs
+          echo "=== APPLICATION LOGS ===" > /tmp/incident-logs/$INCIDENT_ID/pod-logs.log
+          kubectl logs -l app.kubernetes.io/name=${{ env.APP_NAME }} -n ${{ env.NAMESPACE }} --tail=500 >> /tmp/incident-logs/$INCIDENT_ID/pod-logs.log 2>&1 || echo "Failed to collect pod logs" >> /tmp/incident-logs/$INCIDENT_ID/pod-logs.log
+          
+          echo "✅ Pod logs collected"
+
+      - name: Upload to S3 (if AI analysis enabled)
+        id: s3-upload
+        if: ${{ inputs.enable_ai_analysis }}
+        run: |
+          echo "☁️ Uploading logs to S3 for AI analysis..."
+          INCIDENT_ID="${{ steps.incident.outputs.incident-id }}"
+          
+          # Get AWS account ID
+          AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          S3_BUCKET="sre-incident-demo-incident-logs-${AWS_ACCOUNT_ID}"
+          
+          # Create S3 bucket if it doesn't exist
+          if ! aws s3api head-bucket --bucket "$S3_BUCKET" 2>/dev/null; then
+            echo "📦 Creating S3 bucket for incident logs..."
+            aws s3api create-bucket \
+              --bucket "$S3_BUCKET" \
+              --region ${{ env.AWS_REGION }} \
+              --create-bucket-configuration LocationConstraint=${{ env.AWS_REGION }}
+            
+            # Enable versioning and encryption
+            aws s3api put-bucket-versioning --bucket "$S3_BUCKET" --versioning-configuration Status=Enabled
+            aws s3api put-bucket-encryption --bucket "$S3_BUCKET" --server-side-encryption-configuration '{
+              "Rules": [{
+                "ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "AES256"},
+                "BucketKeyEnabled": true
+              }]
+            }'
+          fi
+          
+          # Upload logs
+          aws s3 cp /tmp/incident-logs/$INCIDENT_ID/ s3://$S3_BUCKET/incidents/$INCIDENT_ID/ --recursive
+          
+          # Generate S3 URLs for AI analysis
+          S3_INCIDENT_URL="https://$S3_BUCKET.s3.${{ env.AWS_REGION }}.amazonaws.com/incidents/$INCIDENT_ID/incident.log"
+          
+          echo "s3-bucket=$S3_BUCKET" >> $GITHUB_OUTPUT
+          echo "s3-incident-url=$S3_INCIDENT_URL" >> $GITHUB_OUTPUT
+          echo "✅ Logs uploaded to S3: s3://$S3_BUCKET/incidents/$INCIDENT_ID/"
+
+      - name: Upload Incident Logs Artifact
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: incident-logs-${{ steps.incident.outputs.incident-id }}
+          path: /tmp/incident-logs/
+          retention-days: 7
+
+  ai-analysis:
+    name: 🤖 AI Incident Analysis
+    runs-on: ubuntu-latest
+    needs: [simulate-incident]
+    if: ${{ inputs.enable_ai_analysis }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-1  # Bedrock region
+
+      - name: Download Incident Logs
+        uses: actions/download-artifact@v4
+        with:
+          name: incident-logs-${{ needs.simulate-incident.outputs.incident-id }}
+          path: /tmp/incident-logs/
+
+      - name: Run AI Analysis
+        run: |
+          echo "🤖 Running AI incident analysis..."
+          INCIDENT_ID="${{ needs.simulate-incident.outputs.incident-id }}"
+          
+          # Check if analyze script exists
+          if [ -f "scripts/analyze-incident-bedrock.sh" ]; then
+            echo "🔍 Using local analysis script..."
+            chmod +x scripts/analyze-incident-bedrock.sh
+            
+            # Set up environment for the script
+            export INCIDENT_ID="$INCIDENT_ID"
+            export LOG_DIR="/tmp/incident-logs"
+            
+            # Run analysis
+            ./scripts/analyze-incident-bedrock.sh || echo "⚠️ AI analysis failed, but continuing..."
+            
+            # Check if results were generated
+            if [ -f "bedrock-analysis/bedrock_response_*.json" ]; then
+              echo "✅ AI analysis completed successfully"
+              
+              # Create human-readable summary
+              echo "## 🤖 AI Incident Analysis Results" > /tmp/ai-analysis-summary.md
+              echo "" >> /tmp/ai-analysis-summary.md
+              echo "**Incident ID:** $INCIDENT_ID" >> /tmp/ai-analysis-summary.md
+              echo "**Analysis Time:** $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> /tmp/ai-analysis-summary.md
+              echo "" >> /tmp/ai-analysis-summary.md
+              
+              # Extract key findings (if possible)
+              if command -v jq >/dev/null 2>&1; then
+                LATEST_RESPONSE=$(ls -t bedrock-analysis/bedrock_response_*.json | head -1)
+                if [ -f "$LATEST_RESPONSE" ]; then
+                  echo "### Key Findings" >> /tmp/ai-analysis-summary.md
+                  echo "\`\`\`json" >> /tmp/ai-analysis-summary.md
+                  jq -r '.content[0].text' "$LATEST_RESPONSE" | head -50 >> /tmp/ai-analysis-summary.md 2>/dev/null || echo "Analysis content available in artifacts" >> /tmp/ai-analysis-summary.md
+                  echo "\`\`\`" >> /tmp/ai-analysis-summary.md
+                fi
+              fi
+            else
+              echo "⚠️ AI analysis did not generate expected results"
+            fi
+          else
+            echo "⚠️ AI analysis script not found, skipping analysis"
+          fi
+
+      - name: Upload AI Analysis Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ai-analysis-${{ needs.simulate-incident.outputs.incident-id }}
+          path: |
+            bedrock-analysis/
+            /tmp/ai-analysis-summary.md
+          retention-days: 30
+
+  generate-summary:
+    name: 📋 Generate Summary
+    runs-on: ubuntu-latest
+    needs: [pre-checks, simulate-incident, ai-analysis]
+    if: always()
+    steps:
+      - name: Generate Incident Summary
+        run: |
+          echo "## 🚨 Incident Simulation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📊 Incident Details" >> $GITHUB_STEP_SUMMARY
+          echo "- **Incident ID:** ${{ needs.simulate-incident.outputs.incident-id || 'N/A' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Type:** ${{ inputs.incident_type }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Duration:** ${{ inputs.duration }} minutes" >> $GITHUB_STEP_SUMMARY
+          echo "- **Service URL:** http://${{ needs.pre-checks.outputs.service-url || 'N/A' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **AI Analysis:** ${{ inputs.enable_ai_analysis && '✅ Enabled' || '❌ Disabled' }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📁 Artifacts Generated" >> $GITHUB_STEP_SUMMARY
+          echo "- **Baseline Logs:** Available in artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "- **Incident Logs:** Available in artifacts" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ inputs.enable_ai_analysis }}" = "true" ]; then
+            echo "- **AI Analysis:** Available in artifacts" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🎯 Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "1. **Review Artifacts:** Download and analyze the generated logs" >> $GITHUB_STEP_SUMMARY
+          echo "2. **Check Grafana:** Monitor real-time metrics in Grafana dashboards" >> $GITHUB_STEP_SUMMARY
+          echo "3. **Verify Recovery:** Ensure application has returned to normal state" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ inputs.enable_ai_analysis }}" = "true" ]; then
+            echo "4. **Review AI Analysis:** Check the AI-generated incident analysis and recommendations" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ⚠️ Cleanup" >> $GITHUB_STEP_SUMMARY
+          echo "Remember to run the **teardown.yml** workflow when done to avoid AWS charges!" >> $GITHUB_STEP_SUMMARY

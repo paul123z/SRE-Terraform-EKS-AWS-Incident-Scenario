@@ -1,155 +1,481 @@
-name: Deploy to EKS
+name: 🚀 Deploy SRE Infrastructure & Application
 
 on:
-  workflow_dispatch:  # Manual trigger only
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        default: 'demo'
+        type: choice
+        options:
+        - demo
+        - staging
+      skip_monitoring:
+        description: 'Skip monitoring setup (faster deployment)'
+        required: false
+        default: false
+        type: boolean
 
 env:
   AWS_REGION: eu-central-1
-  EKS_CLUSTER_NAME: sre-incident-demo-cluster
+  CLUSTER_NAME: sre-incident-demo-cluster
   ECR_REPOSITORY: sre-demo-app
+  APP_NAME: sre-demo-app
+  NAMESPACE: default
+  TF_STATE_BUCKET: sre-terraform-state-${{ github.repository_owner }}
+  TF_STATE_KEY: sre-demo/terraform.tfstate
+  TF_DYNAMODB_TABLE: sre-terraform-locks
 
 jobs:
-  test:
+  setup-backend:
+    name: 🏗️ Setup Terraform Backend
     runs-on: ubuntu-latest
+    outputs:
+      account-id: ${{ steps.account.outputs.account-id }}
+      state-bucket: ${{ steps.backend.outputs.state-bucket }}
     steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: false
-    
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
-        cache-dependency-path: app/package-lock.json
-    
-    - name: Install dependencies
-      run: |
-        cd app
-        npm install || echo "npm install failed, will use Docker build instead"
-    
-    - name: Run tests
-      run: |
-        cd app
-        npm test || echo "No tests configured yet" || true
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Get AWS Account ID
+        id: account
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "account-id=$ACCOUNT_ID" >> $GITHUB_OUTPUT
+          echo "🔍 AWS Account ID: ***MASKED***"
+
+      - name: Setup Terraform Backend
+        id: backend
+        run: |
+          ACCOUNT_ID="${{ steps.account.outputs.account-id }}"
+          STATE_BUCKET="${{ env.TF_STATE_BUCKET }}-${ACCOUNT_ID}"
+          
+          echo "🏗️ Setting up Terraform backend..."
+          echo "📦 S3 Bucket: ***MASKED***"
+          echo "🔑 State Key: ${{ env.TF_STATE_KEY }}"
+          echo "🔒 DynamoDB Table: ${{ env.TF_DYNAMODB_TABLE }}"
+          
+          # Create S3 bucket for Terraform state
+          if ! aws s3api head-bucket --bucket "$STATE_BUCKET" 2>/dev/null; then
+            echo "📦 Creating S3 bucket for Terraform state..."
+            aws s3api create-bucket \
+              --bucket "$STATE_BUCKET" \
+              --region ${{ env.AWS_REGION }} \
+              --create-bucket-configuration LocationConstraint=${{ env.AWS_REGION }}
+            
+            # Enable versioning
+            aws s3api put-bucket-versioning \
+              --bucket "$STATE_BUCKET" \
+              --versioning-configuration Status=Enabled
+            
+            # Enable server-side encryption
+            aws s3api put-bucket-encryption \
+              --bucket "$STATE_BUCKET" \
+              --server-side-encryption-configuration '{
+                "Rules": [
+                  {
+                    "ApplyServerSideEncryptionByDefault": {
+                      "SSEAlgorithm": "AES256"
+                    },
+                    "BucketKeyEnabled": true
+                  }
+                ]
+              }'
+            
+            echo "✅ S3 bucket created and configured"
+          else
+            echo "✅ S3 bucket already exists"
+          fi
+          
+          # Create DynamoDB table for state locking
+          if ! aws dynamodb describe-table --table-name "${{ env.TF_DYNAMODB_TABLE }}" 2>/dev/null; then
+            echo "🔒 Creating DynamoDB table for state locking..."
+            aws dynamodb create-table \
+              --table-name "${{ env.TF_DYNAMODB_TABLE }}" \
+              --attribute-definitions AttributeName=LockID,AttributeType=S \
+              --key-schema AttributeName=LockID,KeyType=HASH \
+              --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5
+            
+            echo "⏳ Waiting for DynamoDB table to be active..."
+            aws dynamodb wait table-exists --table-name "${{ env.TF_DYNAMODB_TABLE }}"
+            echo "✅ DynamoDB table created"
+          else
+            echo "✅ DynamoDB table already exists"
+          fi
+          
+          echo "state-bucket=$STATE_BUCKET" >> $GITHUB_OUTPUT
+
+  deploy-infrastructure:
+    name: 🏗️ Deploy Infrastructure
+    runs-on: ubuntu-latest
+    needs: setup-backend
+    outputs:
+      cluster-endpoint: ${{ steps.terraform.outputs.cluster-endpoint }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.8.4
+          terraform_wrapper: false
+
+      - name: Build Lambda Function
+        run: |
+          echo "🔨 Building Lambda function for AI incident analysis..."
+          if [ -f "scripts/build-lambda.sh" ]; then
+            chmod +x scripts/build-lambda.sh
+            ./scripts/build-lambda.sh
+            echo "✅ Lambda function built"
+          else
+            echo "⚠️ Lambda build script not found, skipping"
+          fi
+
+      - name: Create Terraform Backend Configuration
+        working-directory: terraform
+        run: |
+          echo "🔧 Configuring Terraform backend..."
+          cat > backend.tf << EOF
+          terraform {
+            backend "s3" {
+              bucket         = "${{ needs.setup-backend.outputs.state-bucket }}"
+              key            = "${{ env.TF_STATE_KEY }}"
+              region         = "${{ env.AWS_REGION }}"
+              dynamodb_table = "${{ env.TF_DYNAMODB_TABLE }}"
+              encrypt        = true
+            }
+          }
+          EOF
+          echo "✅ Backend configuration created"
+
+      - name: Terraform Init
+        id: init
+        working-directory: terraform
+        run: |
+          echo "🔄 Initializing Terraform..."
+          terraform init
+          echo "✅ Terraform initialized"
+
+      - name: Terraform Plan
+        id: plan
+        working-directory: terraform
+        run: |
+          echo "📋 Planning Terraform deployment..."
+          terraform plan -out=tfplan -no-color
+          echo "✅ Terraform plan completed"
+
+      - name: Terraform Apply
+        id: terraform
+        working-directory: terraform
+        run: |
+          echo "🚀 Applying Terraform configuration..."
+          terraform apply -auto-approve tfplan
+          
+          # Get outputs
+          CLUSTER_ENDPOINT=$(terraform output -raw cluster_endpoint 2>/dev/null || echo "")
+          echo "cluster-endpoint=$CLUSTER_ENDPOINT" >> $GITHUB_OUTPUT
+          echo "✅ Infrastructure deployed successfully"
+
+      - name: Configure kubectl
+        run: |
+          echo "⚙️ Configuring kubectl..."
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.CLUSTER_NAME }}
+          kubectl cluster-info
+          echo "✅ kubectl configured"
 
   build-and-push:
-    needs: test
+    name: 🐳 Build & Push Application
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    
+    needs: [setup-backend, deploy-infrastructure]
+    outputs:
+      image-uri: ${{ steps.build.outputs.image-uri }}
     steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: false
-    
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.AWS_REGION }}
-    
-    - name: Login to Amazon ECR
-      id: login-ecr
-      uses: aws-actions/amazon-ecr-login@v2
-    
-    - name: Build, tag, and push image to Amazon ECR
-      env:
-        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        IMAGE_TAG: ${{ github.sha }}
-      run: |
-        cd app
-        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-  deploy:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: false
-    
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.AWS_REGION }}
-    
-    - name: Update kubeconfig
-      run: aws eks update-kubeconfig --region eu-central-1 --name ${{ env.EKS_CLUSTER_NAME }}
-    
-    - name: Install Helm
-      uses: azure/setup-helm@v3
-      with:
-        version: v3.12.0
-    
-    - name: Deploy to EKS using Helm
-      run: |
-        cd helm/sre-demo-app
-        helm upgrade --install sre-demo-app . \
-          --set image.repository=${{ needs.build-and-push.outputs.image }} \
-          --set image.tag=${{ github.sha }} \
-          --namespace default \
-          --create-namespace \
-          --wait \
-          --timeout 5m
-    
-    - name: Verify deployment
-      run: |
-        kubectl get pods -l app.kubernetes.io/name=sre-demo-app
-        kubectl get svc -l app.kubernetes.io/name=sre-demo-app
-        kubectl get hpa -l app.kubernetes.io/name=sre-demo-app
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
 
-  terraform-plan:
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Create ECR Repository
+        run: |
+          echo "📦 Creating ECR repository..."
+          if ! aws ecr describe-repositories --repository-names ${{ env.ECR_REPOSITORY }} --region ${{ env.AWS_REGION }} 2>/dev/null; then
+            aws ecr create-repository --repository-name ${{ env.ECR_REPOSITORY }} --region ${{ env.AWS_REGION }}
+            echo "✅ ECR repository created"
+          else
+            echo "✅ ECR repository already exists"
+          fi
+
+      - name: Build, tag, and push image
+        id: build
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          echo "🔨 Building Docker image..."
+          cd app
+          docker build -t $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG .
+          docker tag $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:latest
+          
+          echo "📤 Pushing Docker image..."
+          docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG
+          docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:latest
+          
+          IMAGE_URI="$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:latest"
+          echo "image-uri=$IMAGE_URI" >> $GITHUB_OUTPUT
+          echo "✅ Image pushed: $IMAGE_URI"
+
+  deploy-application:
+    name: 🚀 Deploy Application
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    
+    needs: [setup-backend, deploy-infrastructure, build-and-push]
+    outputs:
+      service-url: ${{ steps.deploy.outputs.service-url }}
     steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: false
-    
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.AWS_REGION }}
-    
-    - name: Setup Terraform
-      uses: hashicorp/setup-terraform@v3
-      with:
-        terraform_version: 1.5.0
-    
-    - name: Terraform Init
-      run: |
-        cd terraform
-        terraform init
-    
-    - name: Terraform Plan
-      run: |
-        cd terraform
-        terraform plan -out=tfplan
-      continue-on-error: true
-    
-    - name: Comment PR
-      uses: actions/github-script@v7
-      if: github.event_name == 'pull_request'
-      with:
-        script: |
-          const fs = require('fs');
-          const plan = fs.readFileSync('terraform/tfplan', 'utf8');
-          github.rest.issues.createComment({
-            issue_number: context.issue.number,
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            body: '## Terraform Plan\n```\n' + plan + '\n```'
-          }); 
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Configure kubectl
+        run: |
+          echo "⚙️ Configuring kubectl..."
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.CLUSTER_NAME }}
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: v3.12.0
+
+      - name: Deploy Application with Helm
+        id: deploy
+        run: |
+          echo "🚀 Deploying application with Helm..."
+          cd helm/sre-demo-app
+          
+          helm upgrade --install ${{ env.APP_NAME }} . \
+            --set image.repository=${{ needs.build-and-push.outputs.image-uri }} \
+            --set image.tag=latest \
+            --namespace ${{ env.NAMESPACE }} \
+            --create-namespace \
+            --wait \
+            --timeout 10m
+          
+          echo "⏳ Waiting for service to be ready..."
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=${{ env.APP_NAME }} -n ${{ env.NAMESPACE }} --timeout=300s
+          
+          # Get service URL
+          echo "🔍 Getting service URL..."
+          for i in {1..30}; do
+            SERVICE_URL=$(kubectl get svc ${{ env.APP_NAME }} -n ${{ env.NAMESPACE }} -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
+            if [ -n "$SERVICE_URL" ]; then
+              break
+            fi
+            echo "⏳ Waiting for load balancer... (attempt $i/30)"
+            sleep 10
+          done
+          
+          if [ -n "$SERVICE_URL" ]; then
+            echo "service-url=$SERVICE_URL" >> $GITHUB_OUTPUT
+            echo "✅ Application deployed: http://$SERVICE_URL"
+          else
+            echo "⚠️ Load balancer URL not available yet"
+            echo "service-url=pending" >> $GITHUB_OUTPUT
+          fi
+
+  setup-monitoring:
+    name: 📊 Setup Monitoring
+    runs-on: ubuntu-latest
+    needs: [setup-backend, deploy-infrastructure, deploy-application]
+    if: ${{ !inputs.skip_monitoring }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Configure kubectl
+        run: |
+          echo "⚙️ Configuring kubectl..."
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.CLUSTER_NAME }}
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: v3.12.0
+
+      - name: Install EBS CSI Driver
+        run: |
+          echo "💾 Installing EBS CSI Driver..."
+          helm repo add aws-ebs-csi-driver https://kubernetes-sigs.github.io/aws-ebs-csi-driver
+          helm repo update
+          
+          helm upgrade --install aws-ebs-csi-driver aws-ebs-csi-driver/aws-ebs-csi-driver \
+            --namespace kube-system \
+            --wait \
+            --timeout 10m
+          
+          # Configure IAM permissions
+          NODE_GROUP_NAME=$(aws eks list-nodegroups --cluster-name ${{ env.CLUSTER_NAME }} --region ${{ env.AWS_REGION }} --query 'nodegroups[0]' --output text)
+          NODE_GROUP_ROLE=$(aws eks describe-nodegroup --cluster-name ${{ env.CLUSTER_NAME }} --nodegroup-name $NODE_GROUP_NAME --region ${{ env.AWS_REGION }} --query 'nodegroup.nodeRole' --output text | cut -d'/' -f2)
+          aws iam attach-role-policy --role-name $NODE_GROUP_ROLE --policy-arn arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy
+          echo "✅ EBS CSI Driver installed"
+
+      - name: Install Metrics Server
+        run: |
+          echo "📊 Installing Metrics Server..."
+          kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+          kubectl wait --for=condition=ready pod -l k8s-app=metrics-server -n kube-system --timeout=300s
+          echo "✅ Metrics Server installed"
+
+      - name: Install Prometheus & Grafana
+        run: |
+          echo "📊 Installing Prometheus and Grafana..."
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm repo update
+          
+          helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
+            -f monitoring/prometheus-values.yaml \
+            --namespace monitoring \
+            --create-namespace \
+            --wait \
+            --timeout 20m
+          
+          echo "✅ Monitoring stack installed"
+
+  setup-dashboard:
+    name: 🖥️ Setup Kubernetes Dashboard
+    runs-on: ubuntu-latest
+    needs: [setup-backend, deploy-infrastructure]
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Configure kubectl
+        run: |
+          echo "⚙️ Configuring kubectl..."
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.CLUSTER_NAME }}
+
+      - name: Install Kubernetes Dashboard
+        run: |
+          echo "🖥️ Installing Kubernetes Dashboard..."
+          kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.7.0/aio/deploy/recommended.yaml
+          
+          # Create admin service account
+          kubectl apply -f - <<EOF
+          apiVersion: v1
+          kind: ServiceAccount
+          metadata:
+            name: dashboard-admin
+            namespace: kubernetes-dashboard
+          ---
+          apiVersion: rbac.authorization.k8s.io/v1
+          kind: ClusterRoleBinding
+          metadata:
+            name: dashboard-admin
+          roleRef:
+            apiGroup: rbac.authorization.k8s.io
+            kind: ClusterRole
+            name: cluster-admin
+          subjects:
+          - kind: ServiceAccount
+            name: dashboard-admin
+            namespace: kubernetes-dashboard
+          EOF
+          
+          echo "✅ Kubernetes Dashboard installed"
+
+  verify-deployment:
+    name: ✅ Verify Deployment
+    runs-on: ubuntu-latest
+    needs: [setup-backend, deploy-infrastructure, deploy-application, setup-monitoring, setup-dashboard]
+    if: always()
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Configure kubectl
+        run: |
+          echo "⚙️ Configuring kubectl..."
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.CLUSTER_NAME }}
+
+      - name: Verify Deployment
+        run: |
+          echo "🔍 Verifying deployment..."
+          
+          echo "📊 Cluster Info:"
+          kubectl cluster-info
+          
+          echo "🎯 Application Status:"
+          kubectl get pods -l app.kubernetes.io/name=${{ env.APP_NAME }} -n ${{ env.NAMESPACE }}
+          kubectl get svc ${{ env.APP_NAME }} -n ${{ env.NAMESPACE }}
+          kubectl get hpa -n ${{ env.NAMESPACE }} || echo "HPA not found"
+          
+          echo "📊 Monitoring Status:"
+          kubectl get pods -n monitoring || echo "Monitoring namespace not found"
+          
+          echo "🖥️ Dashboard Status:"
+          kubectl get pods -n kubernetes-dashboard || echo "Dashboard namespace not found"
+          
+          echo "✅ Verification completed"
+
+      - name: Generate Summary
+        run: |
+          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🎯 Application" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ needs.deploy-application.outputs.service-url }}" != "pending" ]; then
+            echo "- **Application URL**: http://${{ needs.deploy-application.outputs.service-url }}" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- **Application URL**: Load balancer provisioning (check later)" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "- **Cluster**: ${{ env.CLUSTER_NAME }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Region**: ${{ env.AWS_REGION }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📊 Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "1. **Run Incident Demo**: Use the \`incident-demo.yml\` workflow" >> $GITHUB_STEP_SUMMARY
+          echo "2. **Access Grafana**: \`kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80\`" >> $GITHUB_STEP_SUMMARY
+          echo "3. **Access Dashboard**: \`kubectl proxy\` and get token with dashboard script" >> $GITHUB_STEP_SUMMARY
+          echo "4. **Monitor Resources**: \`kubectl get pods -A\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ⚠️ Important" >> $GITHUB_STEP_SUMMARY
+          echo "Remember to run the \`teardown.yml\` workflow when done to avoid AWS charges!" >> $GITHUB_STEP_SUMMARY

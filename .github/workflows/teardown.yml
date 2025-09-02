@@ -1,0 +1,509 @@
+name: 🧹 Teardown Infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_destroy:
+        description: 'Type "DESTROY" to confirm infrastructure destruction'
+        required: true
+        type: string
+      skip_verification:
+        description: 'Skip post-teardown verification'
+        required: false
+        default: false
+        type: boolean
+      force_destroy:
+        description: 'Force destroy (ignore errors)'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  AWS_REGION: eu-central-1
+  CLUSTER_NAME: sre-incident-demo-cluster
+  ECR_REPOSITORY: sre-demo-app
+  APP_NAME: sre-demo-app
+  NAMESPACE: default
+  TF_STATE_BUCKET: sre-terraform-state-${{ github.repository_owner }}
+  TF_STATE_KEY: sre-demo/terraform.tfstate
+  TF_DYNAMODB_TABLE: sre-terraform-locks
+
+jobs:
+  confirm-destruction:
+    name: ⚠️ Confirm Destruction
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate Confirmation
+        run: |
+          if [ "${{ inputs.confirm_destroy }}" != "DESTROY" ]; then
+            echo "❌ Destruction not confirmed. You must type 'DESTROY' exactly to proceed."
+            echo "This safety check prevents accidental infrastructure destruction."
+            exit 1
+          fi
+          echo "✅ Destruction confirmed. Proceeding with teardown..."
+
+      - name: Display Warning
+        run: |
+          echo "⚠️ ⚠️ ⚠️ WARNING ⚠️ ⚠️ ⚠️"
+          echo ""
+          echo "This workflow will PERMANENTLY DESTROY the following AWS resources:"
+          echo "- EKS Cluster: ${{ env.CLUSTER_NAME }}"
+          echo "- VPC and all networking components"
+          echo "- ECR Repository: ${{ env.ECR_REPOSITORY }}"
+          echo "- S3 Buckets (incident logs)"
+          echo "- Lambda Functions"
+          echo "- IAM Roles and Policies"
+          echo "- All associated resources"
+          echo ""
+          echo "💰 This action will STOP AWS charges for these resources."
+          echo "📊 All monitoring data will be LOST."
+          echo "🔄 You will need to run deploy.yml to recreate the environment."
+          echo ""
+          echo "⏳ Starting teardown in 10 seconds..."
+          sleep 10
+
+  pre-teardown-backup:
+    name: 💾 Pre-Teardown Backup
+    runs-on: ubuntu-latest
+    needs: confirm-destruction
+    continue-on-error: true
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Backup Current State
+        run: |
+          echo "💾 Creating backup of current infrastructure state..."
+          
+          # Create backup directory
+          mkdir -p /tmp/teardown-backup
+          
+          # Backup EKS cluster info
+          if aws eks describe-cluster --name ${{ env.CLUSTER_NAME }} --region ${{ env.AWS_REGION }} 2>/dev/null; then
+            echo "📊 Backing up EKS cluster information..."
+            aws eks describe-cluster --name ${{ env.CLUSTER_NAME }} --region ${{ env.AWS_REGION }} > /tmp/teardown-backup/eks-cluster.json
+            aws eks list-nodegroups --cluster-name ${{ env.CLUSTER_NAME }} --region ${{ env.AWS_REGION }} > /tmp/teardown-backup/eks-nodegroups.json
+          fi
+          
+          # Backup ECR repository info
+          if aws ecr describe-repositories --repository-names ${{ env.ECR_REPOSITORY }} --region ${{ env.AWS_REGION }} 2>/dev/null; then
+            echo "📦 Backing up ECR repository information..."
+            aws ecr describe-repositories --repository-names ${{ env.ECR_REPOSITORY }} --region ${{ env.AWS_REGION }} > /tmp/teardown-backup/ecr-repository.json
+            aws ecr list-images --repository-name ${{ env.ECR_REPOSITORY }} --region ${{ env.AWS_REGION }} > /tmp/teardown-backup/ecr-images.json 2>/dev/null || echo "No images found"
+          fi
+          
+          # Backup S3 buckets
+          echo "🗂️ Listing S3 buckets..."
+          aws s3api list-buckets --query 'Buckets[?contains(Name, `sre-`) || contains(Name, `terraform-state`)].Name' --output text > /tmp/teardown-backup/s3-buckets.txt
+          
+          # Backup VPC information
+          echo "🌐 Backing up VPC information..."
+          aws ec2 describe-vpcs --filters "Name=tag:Name,Values=sre-incident-demo-vpc" --region ${{ env.AWS_REGION }} > /tmp/teardown-backup/vpc-info.json 2>/dev/null || echo "VPC not found"
+          
+          # Backup timestamp
+          echo "Backup created at: $(date -u +%Y-%m-%dT%H:%M:%SZ)" > /tmp/teardown-backup/backup-info.txt
+          echo "AWS Account: $(aws sts get-caller-identity --query Account --output text)" >> /tmp/teardown-backup/backup-info.txt
+          echo "Region: ${{ env.AWS_REGION }}" >> /tmp/teardown-backup/backup-info.txt
+          
+          echo "✅ Pre-teardown backup completed"
+
+      - name: Upload Backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: pre-teardown-backup-${{ github.run_number }}
+          path: /tmp/teardown-backup/
+          retention-days: 30
+
+  remove-kubernetes-resources:
+    name: ☸️ Remove Kubernetes Resources
+    runs-on: ubuntu-latest
+    needs: [confirm-destruction, pre-teardown-backup]
+    continue-on-error: ${{ inputs.force_destroy }}
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Check EKS Cluster
+        id: cluster-check
+        run: |
+          if aws eks describe-cluster --name ${{ env.CLUSTER_NAME }} --region ${{ env.AWS_REGION }} 2>/dev/null; then
+            echo "cluster-exists=true" >> $GITHUB_OUTPUT
+            echo "✅ EKS cluster found"
+          else
+            echo "cluster-exists=false" >> $GITHUB_OUTPUT
+            echo "ℹ️ EKS cluster not found, skipping Kubernetes cleanup"
+          fi
+
+      - name: Configure kubectl
+        if: steps.cluster-check.outputs.cluster-exists == 'true'
+        run: |
+          echo "⚙️ Configuring kubectl..."
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.CLUSTER_NAME }}
+
+      - name: Setup Helm
+        if: steps.cluster-check.outputs.cluster-exists == 'true'
+        uses: azure/setup-helm@v3
+        with:
+          version: v3.12.0
+
+      - name: Remove Helm Releases
+        if: steps.cluster-check.outputs.cluster-exists == 'true'
+        run: |
+          echo "🗑️ Removing Helm releases..."
+          
+          # Remove application
+          if helm list -n ${{ env.NAMESPACE }} | grep -q ${{ env.APP_NAME }}; then
+            echo "🗑️ Uninstalling application..."
+            helm uninstall ${{ env.APP_NAME }} -n ${{ env.NAMESPACE }} --wait --timeout 5m
+            echo "✅ Application uninstalled"
+          else
+            echo "ℹ️ Application not found"
+          fi
+          
+          # Remove monitoring stack
+          if helm list -n monitoring | grep -q prometheus; then
+            echo "🗑️ Uninstalling monitoring stack..."
+            helm uninstall prometheus -n monitoring --wait --timeout 10m
+            echo "✅ Monitoring stack uninstalled"
+          else
+            echo "ℹ️ Monitoring stack not found"
+          fi
+          
+          # Remove EBS CSI Driver
+          if helm list -n kube-system | grep -q aws-ebs-csi-driver; then
+            echo "🗑️ Uninstalling EBS CSI Driver..."
+            helm uninstall aws-ebs-csi-driver -n kube-system --wait --timeout 5m
+            echo "✅ EBS CSI Driver uninstalled"
+          else
+            echo "ℹ️ EBS CSI Driver not found"
+          fi
+
+      - name: Remove Kubernetes Dashboard
+        if: steps.cluster-check.outputs.cluster-exists == 'true'
+        run: |
+          echo "🗑️ Removing Kubernetes Dashboard..."
+          kubectl delete -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.7.0/aio/deploy/recommended.yaml --ignore-not-found=true
+          echo "✅ Kubernetes Dashboard removed"
+
+      - name: Remove Metrics Server
+        if: steps.cluster-check.outputs.cluster-exists == 'true'
+        run: |
+          echo "🗑️ Removing Metrics Server..."
+          kubectl delete -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml --ignore-not-found=true
+          echo "✅ Metrics Server removed"
+
+      - name: Force Remove Stuck Resources
+        if: steps.cluster-check.outputs.cluster-exists == 'true'
+        run: |
+          echo "🔧 Force removing any stuck resources..."
+          
+          # Remove finalizers from stuck namespaces
+          for ns in monitoring; do
+            if kubectl get namespace $ns 2>/dev/null | grep -q Terminating; then
+              echo "🔧 Removing finalizers from namespace $ns..."
+              kubectl patch namespace $ns -p '{"metadata":{"finalizers":null}}' --type=merge || true
+            fi
+          done
+          
+          # Wait for resources to be cleaned up
+          echo "⏳ Waiting for resources to be cleaned up..."
+          sleep 30
+
+  remove-aws-resources:
+    name: ☁️ Remove AWS Resources
+    runs-on: ubuntu-latest
+    needs: [confirm-destruction, remove-kubernetes-resources]
+    continue-on-error: ${{ inputs.force_destroy }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Clean ECR Repository
+        run: |
+          echo "🗑️ Cleaning ECR repository..."
+          
+          if aws ecr describe-repositories --repository-names ${{ env.ECR_REPOSITORY }} --region ${{ env.AWS_REGION }} 2>/dev/null; then
+            echo "📦 Deleting ECR images..."
+            
+            # Delete all images
+            aws ecr batch-delete-image \
+              --repository-name ${{ env.ECR_REPOSITORY }} \
+              --image-ids imageTag=latest \
+              --region ${{ env.AWS_REGION }} || true
+            
+            # List and delete any remaining images
+            IMAGE_IDS=$(aws ecr list-images --repository-name ${{ env.ECR_REPOSITORY }} --region ${{ env.AWS_REGION }} --query 'imageIds[*]' --output json)
+            if [ "$IMAGE_IDS" != "[]" ]; then
+              aws ecr batch-delete-image \
+                --repository-name ${{ env.ECR_REPOSITORY }} \
+                --image-ids "$IMAGE_IDS" \
+                --region ${{ env.AWS_REGION }} || true
+            fi
+            
+            # Delete repository
+            aws ecr delete-repository \
+              --repository-name ${{ env.ECR_REPOSITORY }} \
+              --force \
+              --region ${{ env.AWS_REGION }}
+            
+            echo "✅ ECR repository deleted"
+          else
+            echo "ℹ️ ECR repository not found"
+          fi
+
+      - name: Clean S3 Buckets
+        run: |
+          echo "🗑️ Cleaning S3 buckets..."
+          
+          # Get AWS account ID
+          AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          
+          # Clean incident logs bucket
+          INCIDENT_BUCKET="sre-incident-demo-incident-logs-${AWS_ACCOUNT_ID}"
+          if aws s3api head-bucket --bucket "$INCIDENT_BUCKET" 2>/dev/null; then
+            echo "🗂️ Emptying incident logs bucket..."
+            aws s3 rm "s3://$INCIDENT_BUCKET" --recursive || true
+            aws s3api delete-bucket --bucket "$INCIDENT_BUCKET" --region ${{ env.AWS_REGION }} || true
+            echo "✅ Incident logs bucket deleted"
+          else
+            echo "ℹ️ Incident logs bucket not found"
+          fi
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.8.4
+          terraform_wrapper: false
+
+      - name: Setup Terraform Backend
+        working-directory: terraform
+        run: |
+          echo "🔧 Setting up Terraform backend..."
+          
+          # Get AWS account ID
+          AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          STATE_BUCKET="${{ env.TF_STATE_BUCKET }}-${AWS_ACCOUNT_ID}"
+          
+          # Create backend configuration
+          cat > backend.tf << EOF
+          terraform {
+            backend "s3" {
+              bucket         = "$STATE_BUCKET"
+              key            = "${{ env.TF_STATE_KEY }}"
+              region         = "${{ env.AWS_REGION }}"
+              dynamodb_table = "${{ env.TF_DYNAMODB_TABLE }}"
+              encrypt        = true
+            }
+          }
+          EOF
+          
+          echo "✅ Backend configuration created"
+
+      - name: Terraform Init
+        working-directory: terraform
+        run: |
+          echo "🔄 Initializing Terraform..."
+          terraform init
+          echo "✅ Terraform initialized"
+
+      - name: Terraform Destroy
+        working-directory: terraform
+        run: |
+          echo "💥 Destroying infrastructure with Terraform..."
+          
+          if [ "${{ inputs.force_destroy }}" = "true" ]; then
+            echo "⚠️ Force destroy enabled - ignoring errors"
+            terraform destroy -auto-approve || echo "⚠️ Some resources may have failed to destroy"
+          else
+            terraform destroy -auto-approve
+          fi
+          
+          echo "✅ Terraform destroy completed"
+
+      - name: Clean Terraform State Bucket
+        run: |
+          echo "🗑️ Cleaning Terraform state bucket..."
+          
+          # Get AWS account ID
+          AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          STATE_BUCKET="${{ env.TF_STATE_BUCKET }}-${AWS_ACCOUNT_ID}"
+          
+          # Clean state bucket
+          if aws s3api head-bucket --bucket "$STATE_BUCKET" 2>/dev/null; then
+            echo "🗂️ Emptying Terraform state bucket..."
+            aws s3 rm "s3://$STATE_BUCKET" --recursive || true
+            
+            # Delete the bucket
+            aws s3api delete-bucket --bucket "$STATE_BUCKET" --region ${{ env.AWS_REGION }} || true
+            echo "✅ Terraform state bucket deleted"
+          else
+            echo "ℹ️ Terraform state bucket not found"
+          fi
+          
+          # Clean DynamoDB table
+          if aws dynamodb describe-table --table-name ${{ env.TF_DYNAMODB_TABLE }} --region ${{ env.AWS_REGION }} 2>/dev/null; then
+            echo "🗑️ Deleting DynamoDB lock table..."
+            aws dynamodb delete-table --table-name ${{ env.TF_DYNAMODB_TABLE }} --region ${{ env.AWS_REGION }}
+            echo "✅ DynamoDB lock table deleted"
+          else
+            echo "ℹ️ DynamoDB lock table not found"
+          fi
+
+  verify-cleanup:
+    name: ✅ Verify Cleanup
+    runs-on: ubuntu-latest
+    needs: [confirm-destruction, remove-aws-resources]
+    if: ${{ !inputs.skip_verification }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Run Verification Script
+        run: |
+          echo "🔍 Running teardown verification..."
+          
+          # Create a simplified verification script
+          cat > /tmp/verify-teardown.sh << 'EOF'
+          #!/bin/bash
+          
+          AWS_REGION="${{ env.AWS_REGION }}"
+          CLUSTER_NAME="${{ env.CLUSTER_NAME }}"
+          ECR_REPOSITORY="${{ env.ECR_REPOSITORY }}"
+          
+          VERIFICATION_FAILED=false
+          
+          echo "🔍 Verifying EKS cluster removal..."
+          if aws eks describe-cluster --name "$CLUSTER_NAME" --region "$AWS_REGION" 2>/dev/null; then
+            echo "❌ EKS cluster still exists"
+            VERIFICATION_FAILED=true
+          else
+            echo "✅ EKS cluster not found"
+          fi
+          
+          echo "🔍 Verifying ECR repository removal..."
+          if aws ecr describe-repositories --repository-names "$ECR_REPOSITORY" --region "$AWS_REGION" 2>/dev/null; then
+            echo "❌ ECR repository still exists"
+            VERIFICATION_FAILED=true
+          else
+            echo "✅ ECR repository not found"
+          fi
+          
+          echo "🔍 Verifying VPC removal..."
+          VPC_IDS=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=sre-incident-demo-vpc" --region "$AWS_REGION" --query 'Vpcs[].VpcId' --output text 2>/dev/null || echo "")
+          if [ -n "$VPC_IDS" ]; then
+            echo "❌ Project VPC still exists: $VPC_IDS"
+            VERIFICATION_FAILED=true
+          else
+            echo "✅ Project VPC not found"
+          fi
+          
+          echo "🔍 Verifying load balancers removal..."
+          LBS=$(aws elbv2 describe-load-balancers --region "$AWS_REGION" --query 'LoadBalancers[?contains(LoadBalancerName, `sre-`) || contains(LoadBalancerName, `k8s-`)].LoadBalancerArn' --output text 2>/dev/null || echo "")
+          if [ -n "$LBS" ]; then
+            echo "⚠️ Some load balancers may still exist (they should be cleaned up automatically)"
+          else
+            echo "✅ No project load balancers found"
+          fi
+          
+          if [ "$VERIFICATION_FAILED" = true ]; then
+            echo "❌ Verification failed - some resources still exist"
+            echo "💡 You may need to manually clean up remaining resources"
+            echo "💡 Or wait a few minutes and run teardown-verify.yml workflow"
+            exit 1
+          else
+            echo "✅ All resources successfully removed"
+          fi
+          EOF
+          
+          chmod +x /tmp/verify-teardown.sh
+          /tmp/verify-teardown.sh
+
+  generate-summary:
+    name: 📋 Generate Summary
+    runs-on: ubuntu-latest
+    needs: [confirm-destruction, remove-kubernetes-resources, remove-aws-resources, verify-cleanup]
+    if: always()
+    steps:
+      - name: Generate Teardown Summary
+        run: |
+          echo "## 🧹 Infrastructure Teardown Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🎯 Teardown Status" >> $GITHUB_STEP_SUMMARY
+          
+          # Check job statuses
+          if [ "${{ needs.confirm-destruction.result }}" = "success" ]; then
+            echo "- ✅ **Confirmation:** Destruction confirmed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ❌ **Confirmation:** Failed or skipped" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "${{ needs.remove-kubernetes-resources.result }}" = "success" ]; then
+            echo "- ✅ **Kubernetes Resources:** Successfully removed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ⚠️ **Kubernetes Resources:** ${{ needs.remove-kubernetes-resources.result }}" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "${{ needs.remove-aws-resources.result }}" = "success" ]; then
+            echo "- ✅ **AWS Resources:** Successfully removed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ⚠️ **AWS Resources:** ${{ needs.remove-aws-resources.result }}" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "${{ needs.verify-cleanup.result }}" = "success" ]; then
+            echo "- ✅ **Verification:** All resources confirmed removed" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.verify-cleanup.result }}" = "skipped" ]; then
+            echo "- ⏭️ **Verification:** Skipped as requested" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ⚠️ **Verification:** ${{ needs.verify-cleanup.result }}" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 💰 Cost Impact" >> $GITHUB_STEP_SUMMARY
+          echo "- **EKS Cluster:** Billing stopped" >> $GITHUB_STEP_SUMMARY
+          echo "- **EC2 Instances:** Terminated" >> $GITHUB_STEP_SUMMARY
+          echo "- **Load Balancers:** Removed" >> $GITHUB_STEP_SUMMARY
+          echo "- **NAT Gateway:** Deleted" >> $GITHUB_STEP_SUMMARY
+          echo "- **Storage:** EBS volumes deleted" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📁 Backup" >> $GITHUB_STEP_SUMMARY
+          echo "- **Pre-teardown backup:** Available in workflow artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "- **Retention:** 30 days" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔄 Recreation" >> $GITHUB_STEP_SUMMARY
+          echo "To recreate the environment:" >> $GITHUB_STEP_SUMMARY
+          echo "1. Run the **deploy.yml** workflow" >> $GITHUB_STEP_SUMMARY
+          echo "2. Wait for complete deployment (~20-30 minutes)" >> $GITHUB_STEP_SUMMARY
+          echo "3. Run **incident-demo.yml** for testing" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ needs.verify-cleanup.result }}" != "success" ]; then
+            echo "### ⚠️ Action Required" >> $GITHUB_STEP_SUMMARY
+            echo "Some resources may still exist. Consider:" >> $GITHUB_STEP_SUMMARY
+            echo "1. Running **teardown-verify.yml** to check remaining resources" >> $GITHUB_STEP_SUMMARY
+            echo "2. Manual cleanup via AWS Console" >> $GITHUB_STEP_SUMMARY
+            echo "3. Checking AWS billing for unexpected charges" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ✅ Complete" >> $GITHUB_STEP_SUMMARY
+            echo "Infrastructure teardown completed successfully. No further action required." >> $GITHUB_STEP_SUMMARY
+          fi
