@@ -179,8 +179,8 @@ jobs:
     needs: [pre-checks, baseline-metrics]
     outputs:
       incident-id: ${{ steps.incident.outputs.incident-id }}
-      s3-incident-url: ${{ steps.incident.outputs.s3-incident-url }}
-      s3-bucket: ${{ steps.incident.outputs.s3-bucket }}
+      s3-incident-url: ${{ steps.s3-upload.outputs.s3-incident-url }}
+      s3-bucket: ${{ steps.s3-upload.outputs.s3-bucket }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
