@@ -127,41 +127,41 @@ jobs:
           
           # Create incident directory
           INCIDENT_ID="gh-incident-$(date +%Y%m%d-%H%M%S)"
-          mkdir -p /tmp/incident-logs/$INCIDENT_ID
+          mkdir -p /tmp/incident-logs
           
           echo "🆔 Incident ID: $INCIDENT_ID"
           echo "incident-id=$INCIDENT_ID" >> $GITHUB_OUTPUT
           
           # Capture baseline state
-          echo "=== BASELINE METRICS ===" > /tmp/incident-logs/$INCIDENT_ID/baseline.log
-          echo "Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
-          echo "Incident ID: $INCIDENT_ID" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
-          echo "" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
+          echo "=== BASELINE METRICS ===" > /tmp/incident-logs/baseline-$INCIDENT_ID.log
+          echo "Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> /tmp/incident-logs/baseline-$INCIDENT_ID.log
+          echo "Incident ID: $INCIDENT_ID" >> /tmp/incident-logs/baseline-$INCIDENT_ID.log
+          echo "" >> /tmp/incident-logs/baseline-$INCIDENT_ID.log
           
           # Pod status
-          echo "=== POD STATUS ===" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
-          kubectl get pods -l app.kubernetes.io/name=${{ env.APP_NAME }} -n ${{ env.NAMESPACE }} -o wide >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
-          echo "" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
+          echo "=== POD STATUS ===" >> /tmp/incident-logs/baseline-$INCIDENT_ID.log
+          kubectl get pods -l app.kubernetes.io/name=${{ env.APP_NAME }} -n ${{ env.NAMESPACE }} -o wide >> /tmp/incident-logs/baseline-$INCIDENT_ID.log
+          echo "" >> /tmp/incident-logs/baseline-$INCIDENT_ID.log
           
           # Resource usage
-          echo "=== RESOURCE USAGE ===" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
-          kubectl top pods -l app.kubernetes.io/name=${{ env.APP_NAME }} -n ${{ env.NAMESPACE }} >> /tmp/incident-logs/$INCIDENT_ID/baseline.log 2>&1 || echo "Metrics server not available" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
-          echo "" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
+          echo "=== RESOURCE USAGE ===" >> /tmp/incident-logs/baseline-$INCIDENT_ID.log
+          kubectl top pods -l app.kubernetes.io/name=${{ env.APP_NAME }} -n ${{ env.NAMESPACE }} >> /tmp/incident-logs/baseline-$INCIDENT_ID.log 2>&1 || echo "Metrics server not available" >> /tmp/incident-logs/baseline-$INCIDENT_ID.log
+          echo "" >> /tmp/incident-logs/baseline-$INCIDENT_ID.log
           
           # Service status
-          echo "=== SERVICE STATUS ===" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
-          kubectl get svc ${{ env.APP_NAME }} -n ${{ env.NAMESPACE }} -o wide >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
-          echo "" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
+          echo "=== SERVICE STATUS ===" >> /tmp/incident-logs/baseline-$INCIDENT_ID.log
+          kubectl get svc ${{ env.APP_NAME }} -n ${{ env.NAMESPACE }} -o wide >> /tmp/incident-logs/baseline-$INCIDENT_ID.log
+          echo "" >> /tmp/incident-logs/baseline-$INCIDENT_ID.log
           
           # HPA status
-          echo "=== HPA STATUS ===" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
-          kubectl get hpa -n ${{ env.NAMESPACE }} >> /tmp/incident-logs/$INCIDENT_ID/baseline.log 2>&1 || echo "HPA not found" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
-          echo "" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
+          echo "=== HPA STATUS ===" >> /tmp/incident-logs/baseline-$INCIDENT_ID.log
+          kubectl get hpa -n ${{ env.NAMESPACE }} >> /tmp/incident-logs/baseline-$INCIDENT_ID.log 2>&1 || echo "HPA not found" >> /tmp/incident-logs/baseline-$INCIDENT_ID.log
+          echo "" >> /tmp/incident-logs/baseline-$INCIDENT_ID.log
           
           # Application health
-          echo "=== APPLICATION HEALTH ===" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
-          curl -s --max-time 10 "http://${{ needs.pre-checks.outputs.service-url }}/health" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log 2>&1 || echo "Health check failed" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
-          echo "" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
+          echo "=== APPLICATION HEALTH ===" >> /tmp/incident-logs/baseline-$INCIDENT_ID.log
+          curl -s --max-time 10 "http://${{ needs.pre-checks.outputs.service-url }}/health" >> /tmp/incident-logs/baseline-$INCIDENT_ID.log 2>&1 || echo "Health check failed" >> /tmp/incident-logs/baseline-$INCIDENT_ID.log
+          echo "" >> /tmp/incident-logs/baseline-$INCIDENT_ID.log
           
           echo "captured=true" >> $GITHUB_OUTPUT
           echo "✅ Baseline metrics captured"
@@ -351,8 +351,8 @@ jobs:
           INCIDENT_ID="${{ steps.incident.outputs.incident-id }}"
           
           # Get pod logs
-          echo "=== APPLICATION LOGS ===" > /tmp/incident-logs/$INCIDENT_ID/pod-logs.log
-          kubectl logs -l app.kubernetes.io/name=${{ env.APP_NAME }} -n ${{ env.NAMESPACE }} --tail=500 >> /tmp/incident-logs/$INCIDENT_ID/pod-logs.log 2>&1 || echo "Failed to collect pod logs" >> /tmp/incident-logs/$INCIDENT_ID/pod-logs.log
+          echo "=== APPLICATION LOGS ===" > /tmp/incident-logs/pod-logs-$INCIDENT_ID.log
+          kubectl logs -l app.kubernetes.io/name=${{ env.APP_NAME }} -n ${{ env.NAMESPACE }} --tail=500 >> /tmp/incident-logs/pod-logs-$INCIDENT_ID.log 2>&1 || echo "Failed to collect pod logs" >> /tmp/incident-logs/pod-logs-$INCIDENT_ID.log
           
           echo "✅ Pod logs collected"
 
@@ -386,7 +386,9 @@ jobs:
           fi
           
           # Upload logs
-          aws s3 cp /tmp/incident-logs/$INCIDENT_ID/ s3://$S3_BUCKET/incidents/$INCIDENT_ID/ --recursive
+          aws s3 cp /tmp/incident-logs/incident-$INCIDENT_ID.log s3://$S3_BUCKET/incidents/$INCIDENT_ID/incident.log
+          aws s3 cp /tmp/incident-logs/baseline-$INCIDENT_ID.log s3://$S3_BUCKET/incidents/$INCIDENT_ID/baseline.log
+          aws s3 cp /tmp/incident-logs/pod-logs-$INCIDENT_ID.log s3://$S3_BUCKET/incidents/$INCIDENT_ID/pod-logs.log
           
           # Generate S3 URLs for AI analysis
           S3_INCIDENT_URL="https://$S3_BUCKET.s3.${{ env.AWS_REGION }}.amazonaws.com/incidents/$INCIDENT_ID/incident.log"
