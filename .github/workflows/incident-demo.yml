@@ -179,7 +179,8 @@ jobs:
     needs: [pre-checks, baseline-metrics]
     outputs:
       incident-id: ${{ steps.incident.outputs.incident-id }}
-      logs-uploaded: ${{ steps.upload.outputs.logs-uploaded }}
+      s3-incident-url: ${{ steps.incident.outputs.s3-incident-url }}
+      s3-bucket: ${{ steps.incident.outputs.s3-bucket }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -442,74 +443,138 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-west-1  # Bedrock region
 
-      - name: Download Incident Logs
-        uses: actions/download-artifact@v4
-        with:
-          name: incident-logs-${{ needs.simulate-incident.outputs.incident-id }}
-          path: /tmp/incident-logs/
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq curl unzip
 
-      - name: Run AI Analysis
+      - name: Extract S3 info and download log
+        id: s3-download
         run: |
           echo "🤖 Running AI incident analysis..."
           INCIDENT_ID="${{ needs.simulate-incident.outputs.incident-id }}"
+          S3_INCIDENT_URL="${{ needs.simulate-incident.outputs.s3-incident-url }}"
+          S3_BUCKET="${{ needs.simulate-incident.outputs.s3-bucket }}"
           
-          echo "🔍 Debug: Received incident ID: '$INCIDENT_ID'"
-          if [ -z "$INCIDENT_ID" ]; then
-            echo "❌ ERROR: Incident ID is empty!"
-            echo "Available outputs from simulate-incident job:"
+          echo "🔍 Debug info:"
+          echo "  Incident ID: '$INCIDENT_ID'"
+          echo "  S3 URL: '$S3_INCIDENT_URL'"
+          echo "  S3 Bucket: '$S3_BUCKET'"
+          
+          if [ -z "$INCIDENT_ID" ] || [ -z "$S3_INCIDENT_URL" ]; then
+            echo "❌ ERROR: Missing required outputs from simulate-incident job!"
+            echo "Available outputs:"
             echo "  incident-id: '${{ needs.simulate-incident.outputs.incident-id }}'"
-            echo "  logs-uploaded: '${{ needs.simulate-incident.outputs.logs-uploaded }}'"
+            echo "  s3-incident-url: '${{ needs.simulate-incident.outputs.s3-incident-url }}'"
+            echo "  s3-bucket: '${{ needs.simulate-incident.outputs.s3-bucket }}'"
             exit 1
           fi
           
-          # Check if analyze script exists
-          if [ -f "scripts/analyze-incident-bedrock.sh" ]; then
-            echo "🔍 Using local analysis script..."
-            chmod +x scripts/analyze-incident-bedrock.sh
-            
-            # Set up environment for the script
-            export INCIDENT_ID="$INCIDENT_ID"
-            export LOG_DIR="/tmp/incident-logs"
-            
-            # Run analysis
-            ./scripts/analyze-incident-bedrock.sh "$INCIDENT_ID" || echo "⚠️ AI analysis failed, but continuing..."
-            
-            # Check if results were generated
-            if ls bedrock-analysis/bedrock_response_*.json 1> /dev/null 2>&1; then
-              echo "✅ AI analysis completed successfully"
-              
-              # Create human-readable summary
-              echo "## 🤖 AI Incident Analysis Results" > /tmp/ai-analysis-summary.md
-              echo "" >> /tmp/ai-analysis-summary.md
-              echo "**Incident ID:** $INCIDENT_ID" >> /tmp/ai-analysis-summary.md
-              echo "**Analysis Time:** $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> /tmp/ai-analysis-summary.md
-              echo "" >> /tmp/ai-analysis-summary.md
-              
-              # Extract key findings (if possible)
-              if command -v jq >/dev/null 2>&1; then
-                LATEST_RESPONSE=$(ls -t bedrock-analysis/bedrock_response_*.json 2>/dev/null | head -1)
-                if [ -n "$LATEST_RESPONSE" ] && [ -f "$LATEST_RESPONSE" ]; then
-                  echo "### Key Findings" >> /tmp/ai-analysis-summary.md
-                  echo "\`\`\`json" >> /tmp/ai-analysis-summary.md
-                  jq -r '.content[0].text' "$LATEST_RESPONSE" | head -50 >> /tmp/ai-analysis-summary.md 2>/dev/null || echo "Analysis content available in artifacts" >> /tmp/ai-analysis-summary.md
-                  echo "\`\`\`" >> /tmp/ai-analysis-summary.md
-                fi
-              fi
-            else
-              echo "⚠️ AI analysis did not generate expected results"
-            fi
+          # Extract S3 bucket and key from URL
+          if [[ "$S3_INCIDENT_URL" == https://*.s3.*.amazonaws.com/* ]]; then
+            BUCKET=$(echo "$S3_INCIDENT_URL" | sed 's|https://||' | cut -d'.' -f1)
+            KEY=$(echo "$S3_INCIDENT_URL" | sed 's|https://[^/]*/||')
           else
-            echo "⚠️ AI analysis script not found, skipping analysis"
+            echo "❌ ERROR: Invalid S3 URL format: $S3_INCIDENT_URL"
+            exit 1
           fi
+          
+          echo "📥 Downloading incident log from S3..."
+          echo "  Bucket: $BUCKET"
+          echo "  Key: $KEY"
+          
+          aws s3 cp "s3://$BUCKET/$KEY" ./incident-log.log
+          
+          echo "📊 Log file info:"
+          echo "  Size: $(wc -c < incident-log.log) bytes"
+          echo "  Lines: $(wc -l < incident-log.log)"
+          
+          # Set outputs
+          echo "incident-id=$INCIDENT_ID" >> $GITHUB_OUTPUT
+          echo "log-downloaded=true" >> $GITHUB_OUTPUT
+
+      - name: Run Bedrock Analysis
+        id: bedrock
+        run: |
+          echo "🧠 Running AI analysis with AWS Bedrock..."
+          
+          # Create the analysis script inline (based on analyze-s3-logs.yml approach)
+          cat > analyze-log.sh << 'EOF'
+          #!/bin/bash
+          
+          # Configuration
+          BEDROCK_MODEL="us.anthropic.claude-sonnet-4-20250514-v1:0"
+          LOG_FILE="incident-log.log"
+          
+          echo "📖 Reading log file..."
+          if [ ! -f "$LOG_FILE" ]; then
+            echo "❌ Log file not found: $LOG_FILE"
+            exit 1
+          fi
+          
+          LOG_CONTENT=$(cat "$LOG_FILE")
+          echo "✅ Log content loaded ($(echo "$LOG_CONTENT" | wc -c) characters)"
+          
+          # Create Bedrock payload
+          cat > bedrock-payload.json << EOL
+          {
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 4000,
+            "messages": [
+              {
+                "role": "user",
+                "content": "You are an expert Site Reliability Engineer (SRE) and incident response specialist. Analyze the following incident log and provide a comprehensive analysis including:\n\n1. **Incident Summary**: Brief overview of what happened\n2. **Root Cause Analysis**: Identify the primary cause\n3. **Timeline**: Key events and timestamps\n4. **Impact Assessment**: What was affected and severity\n5. **Resolution Steps**: What was done to resolve it\n6. **Prevention Recommendations**: How to prevent similar incidents\n7. **Monitoring Improvements**: Suggested alerts or metrics\n\nIncident Log:\n\`\`\`\n$LOG_CONTENT\n\`\`\`\n\nProvide your analysis in a structured, actionable format suitable for an incident report."
+              }
+            ]
+          }
+          EOL
+          
+          echo "🚀 Sending request to Bedrock..."
+          aws bedrock-runtime invoke-model \
+            --model-id "$BEDROCK_MODEL" \
+            --content-type application/json \
+            --accept application/json \
+            --body file://bedrock-payload.json \
+            bedrock-response.json
+          
+          if [ $? -eq 0 ]; then
+            echo "✅ Bedrock analysis completed successfully"
+            
+            # Extract and display the analysis
+            echo "📋 AI Analysis Results:"
+            echo "========================"
+            jq -r '.content[0].text' bedrock-response.json
+            echo "========================"
+            
+            # Save formatted results
+            echo "# 🤖 AI Incident Analysis Report" > analysis-results.txt
+            echo "" >> analysis-results.txt
+            echo "**Generated:** $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> analysis-results.txt
+            echo "**Model:** $BEDROCK_MODEL" >> analysis-results.txt
+            echo "" >> analysis-results.txt
+            jq -r '.content[0].text' bedrock-response.json >> analysis-results.txt
+            
+            echo "analysis-completed=true" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Bedrock analysis failed"
+            echo "analysis-completed=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          EOF
+          
+          chmod +x analyze-log.sh
+          ./analyze-log.sh
 
       - name: Upload AI Analysis Results
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ai-analysis-${{ needs.simulate-incident.outputs.incident-id }}
+          name: ai-analysis-${{ steps.s3-download.outputs.incident-id }}
           path: |
-            bedrock-analysis/
-            /tmp/ai-analysis-summary.md
+            bedrock-response.json
+            incident-log.log
+            analysis-results.txt
+            bedrock-payload.json
           retention-days: 30
 
   generate-summary:
