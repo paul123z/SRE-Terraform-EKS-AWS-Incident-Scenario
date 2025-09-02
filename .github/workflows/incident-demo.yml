@@ -16,7 +16,7 @@ on:
       duration:
         description: 'Duration in minutes'
         required: true
-        default: '3'
+        default: '1'
         type: string
       enable_ai_analysis:
         description: 'Enable AI incident analysis'
