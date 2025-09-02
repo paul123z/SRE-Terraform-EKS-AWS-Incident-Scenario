@@ -105,6 +105,7 @@ jobs:
     needs: pre-checks
     outputs:
       baseline-captured: ${{ steps.metrics.outputs.captured }}
+      incident-id: ${{ steps.metrics.outputs.incident-id }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -461,13 +462,18 @@ jobs:
           echo "  S3 URL: '$S3_INCIDENT_URL'"
           echo "  S3 Bucket: '$S3_BUCKET'"
           
-          if [ -z "$INCIDENT_ID" ] || [ -z "$S3_INCIDENT_URL" ]; then
-            echo "❌ ERROR: Missing required outputs from simulate-incident job!"
+          if [ -z "$S3_INCIDENT_URL" ]; then
+            echo "❌ ERROR: Missing S3 incident URL from simulate-incident job!"
             echo "Available outputs:"
             echo "  incident-id: '${{ needs.simulate-incident.outputs.incident-id }}'"
             echo "  s3-incident-url: '${{ needs.simulate-incident.outputs.s3-incident-url }}'"
             echo "  s3-bucket: '${{ needs.simulate-incident.outputs.s3-bucket }}'"
             exit 1
+          fi
+          
+          if [ -z "$INCIDENT_ID" ]; then
+            echo "⚠️ WARNING: Incident ID is empty, using timestamp fallback"
+            INCIDENT_ID="fallback-$(date +%Y%m%d-%H%M%S)"
           fi
           
           # Extract S3 bucket and key from URL
