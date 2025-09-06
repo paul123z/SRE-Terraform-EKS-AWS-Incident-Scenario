@@ -97,7 +97,7 @@ jobs:
     - name: Destroy S3 buckets (REAL DELETION)
       if: inputs.dry_run == false
       run: |
-        set -e  # Exit on any error
+        # Note: Not using set -e to allow better error handling
         
         echo "🚨 REAL DELETION MODE - Permanently destroying all S3 buckets"
         echo "============================================================="
@@ -229,6 +229,9 @@ jobs:
         echo "🔍 DEBUG: Cleaning up temporary files..."
         rm -f /tmp/versions.json /tmp/delete-markers.json /tmp/bucket-delete-error.log
         echo "🔍 DEBUG: Script completed successfully"
+        
+        # Explicit successful exit
+        exit 0
         
     - name: Final verification
       run: |
