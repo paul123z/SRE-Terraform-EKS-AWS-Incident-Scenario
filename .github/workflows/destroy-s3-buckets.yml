@@ -97,141 +97,114 @@ jobs:
     - name: Destroy S3 buckets (REAL DELETION)
       if: inputs.dry_run == false
       run: |
-        # Note: Not using set -e to allow better error handling
-        
         echo "🚨 REAL DELETION MODE - Permanently destroying all S3 buckets"
         echo "============================================================="
-        echo "🔍 DEBUG: Starting bucket destruction process..."
         
-        # Get list of buckets with debugging
-        echo "🔍 DEBUG: Listing all S3 buckets..."
-        BUCKETS=$(aws s3api list-buckets --query 'Buckets[*].Name' --output text)
-        echo "🔍 DEBUG: Found buckets: '$BUCKETS'"
+        # Get list of buckets
+        echo "📋 Listing all S3 buckets..."
+        BUCKETS=$(aws s3api list-buckets --query 'Buckets[*].Name' --output text 2>&1)
+        BUCKET_LIST_EXIT_CODE=$?
+        
+        echo "📋 Bucket list command exit code: $BUCKET_LIST_EXIT_CODE"
+        echo "📋 Found buckets: '$BUCKETS'"
+        
+        if [ $BUCKET_LIST_EXIT_CODE -ne 0 ]; then
+          echo "❌ ERROR: Failed to list S3 buckets!"
+          echo "Error details: $BUCKETS"
+          exit 1
+        fi
         
         if [ -z "$BUCKETS" ] || [ "$BUCKETS" = "None" ]; then
           echo "✅ No S3 buckets found to delete"
-          echo "🔍 DEBUG: Exiting successfully with no buckets to process"
           exit 0
         fi
         
         DELETED_COUNT=0
         FAILED_COUNT=0
         
-        echo "🔍 DEBUG: Processing $(echo $BUCKETS | wc -w) bucket(s)..."
-        
+        # Process each bucket
         for bucket in $BUCKETS; do
           echo ""
           echo "🗑️  Destroying bucket: $bucket"
-          echo "🔍 DEBUG: Starting destruction of bucket: $bucket"
           
-          # Step 1: Delete all object versions and delete markers
-          echo "   📄 Deleting all object versions and delete markers..."
-          echo "🔍 DEBUG: Listing object versions for bucket: $bucket"
+          # Step 1: Empty the bucket completely (this handles all objects, versions, and delete markers)
+          echo "   🧹 Emptying bucket completely..."
+          aws s3 rm "s3://$bucket" --recursive 2>&1
+          S3_RM_EXIT_CODE=$?
+          echo "   📊 s3 rm exit code: $S3_RM_EXIT_CODE"
           
-          # Create temp files with error handling
-          if ! aws s3api list-object-versions --bucket "$bucket" --query '{Objects: Versions[].{Key:Key,VersionId:VersionId}}' --output json > /tmp/versions.json 2>/dev/null; then
-            echo "🔍 DEBUG: No versions found or error occurred, creating empty versions file"
-            echo '{"Objects": []}' > /tmp/versions.json
-          fi
+          # Step 2: Delete all object versions and delete markers
+          echo "   🗂️  Removing all object versions and delete markers..."
+          aws s3api list-object-versions --bucket "$bucket" 2>&1 | head -20
           
-          if ! aws s3api list-object-versions --bucket "$bucket" --query '{Objects: DeleteMarkers[].{Key:Key,VersionId:VersionId}}' --output json > /tmp/delete-markers.json 2>/dev/null; then
-            echo "🔍 DEBUG: No delete markers found or error occurred, creating empty delete markers file"
-            echo '{"Objects": []}' > /tmp/delete-markers.json
-          fi
+          # Use aws s3api to delete versions if they exist
+          aws s3api list-object-versions --bucket "$bucket" --output json > /tmp/versions_full.json 2>&1
+          LIST_VERSIONS_EXIT_CODE=$?
+          echo "   📊 list-object-versions exit code: $LIST_VERSIONS_EXIT_CODE"
           
-          # Check what we found
-          VERSION_COUNT=$(jq '.Objects | length' /tmp/versions.json)
-          DELETE_MARKER_COUNT=$(jq '.Objects | length' /tmp/delete-markers.json)
-          echo "🔍 DEBUG: Found $VERSION_COUNT versions and $DELETE_MARKER_COUNT delete markers"
-          
-          # Delete versions if they exist
-          if [ "$VERSION_COUNT" -gt 0 ]; then
-            echo "🔍 DEBUG: Deleting $VERSION_COUNT object versions..."
-            if aws s3api delete-objects --bucket "$bucket" --delete file:///tmp/versions.json > /dev/null 2>&1; then
-              echo "🔍 DEBUG: Successfully deleted object versions"
-            else
-              echo "   ⚠️  Some versions could not be deleted"
-              echo "🔍 DEBUG: Error occurred while deleting object versions"
+          if [ $LIST_VERSIONS_EXIT_CODE -eq 0 ]; then
+            # Extract and delete versions
+            jq '{Objects: [.Versions[]? | {Key, VersionId}]}' /tmp/versions_full.json > /tmp/versions.json 2>/dev/null || echo '{"Objects": []}' > /tmp/versions.json
+            jq '{Objects: [.DeleteMarkers[]? | {Key, VersionId}]}' /tmp/versions_full.json > /tmp/delete-markers.json 2>/dev/null || echo '{"Objects": []}' > /tmp/delete-markers.json
+            
+            VERSION_COUNT=$(jq '.Objects | length' /tmp/versions.json)
+            DELETE_MARKER_COUNT=$(jq '.Objects | length' /tmp/delete-markers.json)
+            echo "   📊 Found $VERSION_COUNT versions and $DELETE_MARKER_COUNT delete markers"
+            
+            if [ "$VERSION_COUNT" -gt 0 ]; then
+              echo "   🗑️  Deleting $VERSION_COUNT object versions..."
+              aws s3api delete-objects --bucket "$bucket" --delete file:///tmp/versions.json 2>&1
+              echo "   📊 Delete versions exit code: $?"
             fi
-          else
-            echo "🔍 DEBUG: No object versions to delete"
-          fi
-          
-          # Delete delete markers if they exist
-          if [ "$DELETE_MARKER_COUNT" -gt 0 ]; then
-            echo "🔍 DEBUG: Deleting $DELETE_MARKER_COUNT delete markers..."
-            if aws s3api delete-objects --bucket "$bucket" --delete file:///tmp/delete-markers.json > /dev/null 2>&1; then
-              echo "🔍 DEBUG: Successfully deleted delete markers"
-            else
-              echo "   ⚠️  Some delete markers could not be removed"
-              echo "🔍 DEBUG: Error occurred while deleting delete markers"
+            
+            if [ "$DELETE_MARKER_COUNT" -gt 0 ]; then
+              echo "   🗑️  Deleting $DELETE_MARKER_COUNT delete markers..."
+              aws s3api delete-objects --bucket "$bucket" --delete file:///tmp/delete-markers.json 2>&1
+              echo "   📊 Delete markers exit code: $?"
             fi
-          else
-            echo "🔍 DEBUG: No delete markers to delete"
-          fi
-          
-          # Step 2: Delete all current objects
-          echo "   📦 Deleting all current objects..."
-          echo "🔍 DEBUG: Removing all current objects from bucket: $bucket"
-          if aws s3 rm "s3://$bucket" --recursive > /dev/null 2>&1; then
-            echo "🔍 DEBUG: Successfully removed all current objects"
-          else
-            echo "   ⚠️  Some objects could not be deleted"
-            echo "🔍 DEBUG: Error occurred or no objects to delete"
           fi
           
           # Step 3: Delete the bucket itself
           echo "   🗑️  Deleting bucket..."
-          echo "🔍 DEBUG: Attempting to delete bucket: $bucket"
+          DELETE_RESULT=$(aws s3api delete-bucket --bucket "$bucket" 2>&1)
+          DELETE_EXIT_CODE=$?
           
-          if aws s3api delete-bucket --bucket "$bucket" 2>/tmp/bucket-delete-error.log; then
+          echo "   📊 Delete bucket exit code: $DELETE_EXIT_CODE"
+          
+          if [ $DELETE_EXIT_CODE -eq 0 ]; then
             echo "   ✅ Successfully deleted bucket: $bucket"
-            echo "🔍 DEBUG: Bucket $bucket deleted successfully"
-            ((DELETED_COUNT++))
+            DELETED_COUNT=$((DELETED_COUNT + 1))
           else
             echo "   ❌ Failed to delete bucket: $bucket"
-            echo "🔍 DEBUG: Failed to delete bucket: $bucket"
-            echo "🔍 DEBUG: Error details:"
-            cat /tmp/bucket-delete-error.log || echo "No error details available"
-            ((FAILED_COUNT++))
+            echo "   🔍 Error details: $DELETE_RESULT"
+            FAILED_COUNT=$((FAILED_COUNT + 1))
           fi
           
-          echo "🔍 DEBUG: Completed processing bucket: $bucket (Deleted: $DELETED_COUNT, Failed: $FAILED_COUNT)"
+          echo "   📊 Running totals - Deleted: $DELETED_COUNT, Failed: $FAILED_COUNT"
         done
         
+        # Final summary
         echo ""
         echo "============================================================="
-        echo "📊 DESTRUCTION SUMMARY:"
+        echo "📊 FINAL SUMMARY:"
         echo "   ✅ Buckets successfully deleted: $DELETED_COUNT"
         echo "   ❌ Buckets failed to delete: $FAILED_COUNT"
-        echo "🔍 DEBUG: Final counts - Deleted: $DELETED_COUNT, Failed: $FAILED_COUNT"
         
+        # Clean up temp files
+        rm -f /tmp/versions.json /tmp/delete-markers.json /tmp/versions_full.json 2>/dev/null
+        
+        # Check final result
         if [ $FAILED_COUNT -gt 0 ]; then
           echo ""
-          echo "⚠️  Some buckets could not be deleted. Common reasons:"
-          echo "   - Bucket has a deletion policy"
-          echo "   - Bucket is not empty (objects still exist)"
-          echo "   - Insufficient permissions"
-          echo "   - Bucket is being used by other AWS services"
-          echo ""
-          echo "🔍 Remaining buckets:"
-          echo "🔍 DEBUG: Listing remaining buckets after deletion attempt..."
-          aws s3api list-buckets --query 'Buckets[*].Name' --output table
-          echo "🔍 DEBUG: About to exit with code 1 due to failed deletions"
+          echo "❌ Some buckets could not be deleted!"
+          echo "🔍 Checking remaining buckets..."
+          aws s3api list-buckets --query 'Buckets[*].Name' --output table 2>&1
           exit 1
         else
           echo ""
           echo "🎉 ALL S3 BUCKETS HAVE BEEN PERMANENTLY DESTROYED!"
-          echo "🔍 DEBUG: All buckets deleted successfully, exiting with code 0"
+          exit 0
         fi
-        
-        # Clean up temp files
-        echo "🔍 DEBUG: Cleaning up temporary files..."
-        rm -f /tmp/versions.json /tmp/delete-markers.json /tmp/bucket-delete-error.log
-        echo "🔍 DEBUG: Script completed successfully"
-        
-        # Explicit successful exit
-        exit 0
         
     - name: Final verification
       run: |
