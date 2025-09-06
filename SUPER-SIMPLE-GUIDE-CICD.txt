@@ -1,0 +1,33 @@
+Run Github Action https://github.com/paul123z/SRE-Terraform-EKS-AWS-Incident-Scenario/actions/workflows/deploy.yml
+Run workflow: Deploy SRE Infrastructure & Application
+#Make sure secrets are stored in github repository in Settings -> Secrets and variables -> Actions
+
+Run on local machine to update kubeconfig context
+aws eks update-kubeconfig --region eu-central-1 --name sre-incident-demo-cluster
+
+kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80
+URL: http://localhost:3000
+Username: admin
+Password: admin123
+
+kubectl proxy
+http://localhost:8001/api/v1/namespaces/kubernetes-dashboard/services/https:kubernetes-dashboard:/proxy/#/login
+
+generate token:
+./scripts/get-dashboard-token.sh
+
+#list horizontalpodautoscaler HPA
+kubectl get hpa -A
+
+Run Github Action https://github.com/paul123z/SRE-Terraform-EKS-AWS-Incident-Scenario/actions/workflows/incident-demo.yml
+Run workflow: Incident Simulation Demo
+Monitor Memory via 'Dashboard Kubernetes / Compute Resources / Namespace (Pods)'
+
+Run Remaining Github Actions:
+Optional to AI analyze log by providing exact S3 Object URL  https://github.com/paul123z/SRE-Terraform-EKS-AWS-Incident-Scenario/actions/workflows/analyze-s3-logs.yml
+
+Terraform Destroy Teardown Job: https://github.com/paul123z/SRE-Terraform-EKS-AWS-Incident-Scenario/actions/workflows/teardown.yml
+
+Verify Teardown Job: https://github.com/paul123z/SRE-Terraform-EKS-AWS-Incident-Scenario/actions/workflows/teardown-verify.yml
+
+Delete S3 Buckets manually via AWS Web console

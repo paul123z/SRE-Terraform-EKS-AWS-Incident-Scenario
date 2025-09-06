@@ -35,7 +35,14 @@ SRE-Terraform-EKS-AWS-Incident-Scenario/
 │
 ├── 🔄 .github/                            # CI/CD Pipeline Configuration
 │   └── workflows/                        # GitHub Actions workflows
-│       └── 📄 deploy.yml                 # Main deployment workflow
+│       ├── 📄 README.md                  # Workflows documentation and flowcharts
+│       ├── 📄 deploy.yml                 # Complete infrastructure deployment
+│       ├── 📄 incident-demo.yml          # Incident simulation and AI analysis
+│       ├── 📄 teardown.yml               # Infrastructure teardown
+│       ├── 📄 teardown-verify.yml        # Cleanup verification
+│       ├── 📄 analyze-s3-logs.yml        # Standalone S3 log analysis
+│       ├── 📄 build-push-deploy-app.yml  # Application-only deployment
+│       └── 📄 deploy-app-only.yml        # Deploy existing image
 │
 ├── 🛠️ scripts/                            # Automation and Utility Scripts
 │   ├── 📄 README.md                      # Scripts documentation
@@ -111,15 +118,25 @@ SRE-Terraform-EKS-AWS-Incident-Scenario/
 - Cost-optimized storage and resource allocation
 
 ### 🔄 **CI/CD Layer (.github/)**
-**Purpose**: Automates the build, test, and deployment process.
+**Purpose**: Automates the complete infrastructure lifecycle, incident response, and AI-powered analysis.
 
 **Key Components**:
-- **workflows/deploy.yml**: GitHub Actions workflow for automated deployment
+- **workflows/README.md**: Comprehensive documentation with Mermaid flowcharts for all workflows
+- **workflows/deploy.yml**: Complete infrastructure deployment with S3 backend for Terraform state
+- **workflows/incident-demo.yml**: Automated incident simulation with AWS Bedrock AI analysis
+- **workflows/teardown.yml**: Infrastructure teardown with proper state management
+- **workflows/teardown-verify.yml**: Cleanup verification and cost analysis
+- **workflows/analyze-s3-logs.yml**: Standalone S3 log analysis using Claude Sonnet 4
+- **workflows/build-push-deploy-app.yml**: Application-only deployment pipeline
+- **workflows/deploy-app-only.yml**: Deploy existing Docker images to EKS
 
 **Benefits**:
-- Automated deployment pipeline reduces human error
-- Consistent deployment process across environments
-- Built-in testing and validation steps
+- **Complete automation**: From infrastructure provisioning to AI incident analysis
+- **Branch-specific deployments**: Prevents resource conflicts across feature branches
+- **Secure state management**: S3 backend with DynamoDB locking for Terraform state
+- **AI-powered insights**: AWS Bedrock integration for automated root cause analysis
+- **Public repository safe**: All sensitive data masked in GitHub Actions logs
+- **Cost optimization**: Automated teardown and verification workflows
 
 ### 🛠️ **Automation Layer (scripts/)**
 **Purpose**: Provides automation for common operational tasks and incident simulation.
@@ -173,7 +190,8 @@ This project is designed as an **open-source contribution to the SRE, DevOps, an
 - **Application**: Node.js, Express.js, Docker
 - **Orchestration**: Kubernetes, Helm
 - **Monitoring**: Prometheus, Grafana
-- **CI/CD**: GitHub Actions
+- **CI/CD**: GitHub Actions (7 automated workflows)
+- **AI Analysis**: AWS Bedrock with Claude Sonnet 4
 - **Automation**: Bash scripting, AWS CLI
 
 This project serves as a comprehensive learning platform for modern cloud-native operations and incident response practices.
