@@ -1,131 +1,8 @@
-# 🚀 Automated SRE Workflows
+# 🚀 SRE GitHub Actions Workflows
 
-This directory contains GitHub Actions workflows that fully automate your SRE infrastructure deployment, incident simulation, and teardown processes. These workflows replace the need for local script execution while maintaining security best practices.
+This directory contains automated GitHub Actions workflows that replace manual scripts with secure, scalable CI/CD automation. All workflows are designed for public repositories with proper secret management.
 
-## 📋 Available Workflows
-
-### 1. 🚀 `deploy.yml` - Deploy SRE Infrastructure & Application
-**Purpose**: Complete infrastructure and application deployment
-**Replaces**: `deploy.sh` script
-
-**Features**:
-- ✅ S3 backend for Terraform state (secure, versioned)
-- ✅ Automatic AWS resource provisioning
-- ✅ Docker image build and ECR push
-- ✅ Kubernetes application deployment
-- ✅ Monitoring stack setup (Prometheus/Grafana)
-- ✅ Kubernetes Dashboard installation
-- ✅ Comprehensive verification
-
-**Inputs**:
-- `environment`: Choose deployment environment (demo/staging)
-- `skip_monitoring`: Skip monitoring setup for faster deployment
-
-**Duration**: ~20-30 minutes
-
-### 2. 🚨 `incident-demo.yml` - Incident Simulation Demo
-**Purpose**: Simulate and analyze production incidents
-**Replaces**: `incident-demo.sh` script
-
-**Features**:
-- ✅ Multiple incident types (memory leak, CPU stress, health failure)
-- ✅ Real-time metrics collection
-- ✅ AI-powered incident analysis with AWS Bedrock
-- ✅ Automatic log capture and S3 upload
-- ✅ Comprehensive incident reporting
-
-**Inputs**:
-- `incident_type`: Type of incident to simulate
-- `duration`: Duration in minutes
-- `enable_ai_analysis`: Enable AI analysis with Claude Sonnet 4
-
-**Duration**: ~5-15 minutes (depending on duration)
-
-### 3. 🧹 `teardown.yml` - Teardown Infrastructure
-**Purpose**: Safely destroy all AWS resources
-**Replaces**: `teardown.sh` script
-
-**Features**:
-- ✅ Safety confirmation required ("DESTROY")
-- ✅ Pre-teardown backup creation
-- ✅ Kubernetes resource cleanup
-- ✅ AWS resource destruction
-- ✅ S3 and DynamoDB cleanup
-- ✅ Cost impact reporting
-
-**Inputs**:
-- `confirm_destroy`: Must type "DESTROY" to proceed
-- `skip_verification`: Skip post-teardown verification
-- `force_destroy`: Force destroy (ignore errors)
-
-**Duration**: ~10-20 minutes
-
-### 4. ✅ `teardown-verify.yml` - Verify Teardown Completion
-**Purpose**: Verify all resources are properly cleaned up
-**Replaces**: `teardown-verify.sh` script
-
-**Features**:
-- ✅ Core resource verification (EKS, ECR, VPC)
-- ✅ Detailed resource checking
-- ✅ Billing impact assessment
-- ✅ Auto-cleanup option
-- ✅ Comprehensive reporting
-
-**Inputs**:
-- `detailed_check`: Perform detailed resource verification
-- `check_billing`: Check for potential billing impact
-- `auto_cleanup`: Attempt to clean up remaining resources
-
-**Duration**: ~3-5 minutes
-
-## 🔒 Security Features
-
-### **State Management**
-- ✅ **S3 Backend**: Terraform state stored securely in S3
-- ✅ **Encryption**: Server-side encryption enabled
-- ✅ **Versioning**: State file versioning for rollback
-- ✅ **Locking**: DynamoDB table for state locking
-
-### **Secrets Protection**
-- ✅ **GitHub Secrets**: AWS credentials stored securely
-- ✅ **No Hardcoding**: No sensitive data in workflow files
-- ✅ **Masked Outputs**: Sensitive values automatically masked
-- ✅ **Public Safe**: All workflows safe for public repositories
-
-### **Access Control**
-- ✅ **Manual Triggers**: All workflows require manual execution
-- ✅ **Confirmation**: Destruction requires explicit confirmation
-- ✅ **Audit Trail**: Complete execution history in GitHub
-
-## 🚀 Quick Start Guide
-
-### **Prerequisites**
-1. **GitHub Secrets**: Configure `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`
-2. **AWS Permissions**: Admin access or equivalent permissions
-3. **Public Repository**: Workflows designed for public repos
-
-### **Deployment Workflow**
-1. Go to **Actions** → **Deploy SRE Infrastructure & Application**
-2. Click **Run workflow**
-3. Select environment and options
-4. Wait for completion (~20-30 minutes)
-5. Access your application via the provided URL
-
-### **Incident Simulation Workflow**
-1. Ensure infrastructure is deployed
-2. Go to **Actions** → **Incident Simulation Demo**
-3. Click **Run workflow**
-4. Select incident type and duration
-5. Monitor results and download artifacts
-
-### **Teardown Workflow**
-1. Go to **Actions** → **Teardown Infrastructure**
-2. Click **Run workflow**
-3. Type "DESTROY" in the confirmation field
-4. Wait for completion (~10-20 minutes)
-5. Verify with teardown-verify workflow if needed
-
-## 📊 Workflow Architecture
+## 📊 Overall Workflow Architecture
 
 ```mermaid
 graph TD
@@ -153,103 +30,487 @@ graph TD
     E --> E4[Verify Cleanup]
 ```
 
+This architecture shows the complete SRE workflow lifecycle from infrastructure deployment to incident analysis and cleanup.
+
+## 📋 Available Workflows
+
+### 1. 🚀 **`deploy.yml`** - Complete Infrastructure Deployment
+**Purpose**: Deploy full SRE infrastructure and application  
+**Replaces**: `deploy.sh` script  
+**Trigger**: Manual (`workflow_dispatch`)
+
+**What it does**:
+- Sets up secure S3 backend for Terraform state
+- Provisions AWS infrastructure (VPC, EKS, ECR, Lambda, DynamoDB)
+- Builds and pushes Docker application to ECR
+- Deploys application to Kubernetes with Helm
+- Installs monitoring stack (Prometheus, Grafana)
+- Sets up Kubernetes Dashboard
+
+**Inputs**:
+- `environment`: Deployment environment (demo/staging)
+- `skip_monitoring`: Skip monitoring setup for faster deployment
+
+**Duration**: ~20-30 minutes
+
+```mermaid
+flowchart TD
+    A[🚀 Deploy Workflow] --> B[Setup S3 Backend]
+    B --> C[Deploy Infrastructure]
+    C --> D[Build & Push App]
+    D --> E[Deploy Application]
+    E --> F[Setup Monitoring]
+    F --> G[Setup Dashboard]
+    G --> H[Verify Deployment]
+    H --> I[✅ Ready for Use]
+    
+    C --> C1[VPC + Subnets]
+    C --> C2[EKS Cluster]
+    C --> C3[Lambda Functions]
+    C --> C4[DynamoDB Tables]
+    
+    E --> E1[Helm Install]
+    E --> E2[Service Exposure]
+    E --> E3[Health Checks]
+    
+    F --> F1[Prometheus]
+    F --> F2[Grafana]
+    F --> F3[Dashboards]
+```
+
+---
+
+### 2. 🚨 **`incident-demo.yml`** - AI-Powered Incident Simulation
+**Purpose**: Simulate incidents and analyze with AI  
+**Replaces**: `incident-demo.sh` script  
+**Trigger**: Manual (`workflow_dispatch`)
+
+**What it does**:
+- Captures baseline metrics before incident
+- Simulates various incident types (memory leak, CPU stress, health failure)
+- Collects real-time metrics during incident
+- Uploads logs to S3 for analysis
+- Runs AI analysis using AWS Bedrock & Claude Sonnet 4
+- Generates comprehensive incident reports
+
+**Inputs**:
+- `incident_type`: Type to simulate (memory_leak/cpu_stress/health_failure/all_scenarios)
+- `duration`: Duration in minutes (1-60)
+- `enable_ai_analysis`: Enable AI-powered analysis
+
+**Duration**: ~5-15 minutes
+
+```mermaid
+flowchart TD
+    A[🚨 Incident Demo] --> B[Pre-Flight Checks]
+    B --> C[Capture Baseline]
+    C --> D[Simulate Incident]
+    D --> E[Collect Pod Logs]
+    E --> F[Upload to S3]
+    F --> G[AI Analysis]
+    G --> H[Generate Summary]
+    H --> I[📋 Complete Report]
+    
+    D --> D1[Trigger Incident]
+    D --> D2[Monitor Metrics]
+    D --> D3[Collect Data]
+    D --> D4[Stop Incident]
+    
+    G --> G1[Download Logs]
+    G --> G2[AWS Bedrock]
+    G --> G3[Claude Analysis]
+    G --> G4[RCA Report]
+    
+    classDef ai fill:#8B5CF6,stroke:#8B5CF6,stroke-width:2px,color:#fff
+    classDef default fill:#f9f9f9,stroke:#333,stroke-width:2px,color:#000
+    
+    class G,G1,G2,G3,G4 ai
+```
+
+---
+
+### 3. 🧹 **`teardown.yml`** - Infrastructure Teardown
+**Purpose**: Safely destroy all AWS resources  
+**Replaces**: `teardown.sh` script  
+**Trigger**: Manual (`workflow_dispatch`)
+
+**What it does**:
+- Requires explicit "DESTROY" confirmation
+- Removes Kubernetes resources first
+- Destroys AWS infrastructure with Terraform
+- Cleans up S3 buckets and DynamoDB tables
+- Provides cost savings report
+
+**Inputs**:
+- `confirm_destroy`: Must type "DESTROY" to proceed
+- `skip_verification`: Skip post-teardown verification
+- `force_destroy`: Force destroy ignoring errors
+
+**Duration**: ~10-20 minutes
+
+```mermaid
+flowchart TD
+    A[🧹 Teardown] --> B{Confirm DESTROY?}
+    B -->|No| X[❌ Cancelled]
+    B -->|Yes| C[Backup State]
+    C --> D[Remove K8s Resources]
+    D --> E[Terraform Destroy]
+    E --> F[Cleanup S3/DynamoDB]
+    F --> G[Verify Cleanup]
+    G --> H[💰 Cost Report]
+    H --> I[✅ Clean Environment]
+    
+    D --> D1[Helm Uninstall]
+    D --> D2[K8s Resources]
+    D --> D3[Namespaces]
+    
+    E --> E1[Lambda Functions]
+    E --> E2[EKS Cluster]
+    E --> E3[VPC Resources]
+    E --> E4[ECR Repository]
+    
+    classDef destroy fill:#FF6B6B,stroke:#FF6B6B,stroke-width:2px,color:#fff
+    classDef cancelled fill:#c62828,stroke:#c62828,stroke-width:2px,color:#fff
+    classDef default fill:#f9f9f9,stroke:#333,stroke-width:2px,color:#000
+    
+    class B destroy
+    class X cancelled
+```
+
+---
+
+### 4. ✅ **`teardown-verify.yml`** - Verify Complete Cleanup
+**Purpose**: Verify all resources are properly cleaned up  
+**Replaces**: `teardown-verify.sh` script  
+**Trigger**: Manual (`workflow_dispatch`)
+
+**What it does**:
+- Checks for remaining AWS resources
+- Verifies EKS, ECR, VPC, Lambda cleanup
+- Estimates potential billing impact
+- Offers auto-cleanup of remaining resources
+
+**Inputs**:
+- `detailed_check`: Perform detailed resource verification
+- `check_billing`: Check for potential billing impact  
+- `auto_cleanup`: Attempt to clean up remaining resources
+
+**Duration**: ~3-5 minutes
+
+```mermaid
+flowchart TD
+    A[✅ Verify Teardown] --> B[Check Core Resources]
+    B --> C[Check EKS Clusters]
+    C --> D[Check ECR Repos]
+    D --> E[Check VPC Resources]
+    E --> F[Check Lambda Functions]
+    F --> G{Resources Found?}
+    G -->|No| H[✅ All Clean]
+    G -->|Yes| I[📋 Resource Report]
+    I --> J{Auto Cleanup?}
+    J -->|Yes| K[🔧 Auto Cleanup]
+    J -->|No| L[⚠️ Manual Action Needed]
+    K --> M[✅ Cleanup Complete]
+    
+    B --> B1[Cost Analysis]
+    B --> B2[Billing Impact]
+    
+    classDef success fill:#10B981,stroke:#10B981,stroke-width:2px,color:#fff
+    classDef warning fill:#f59e0b,stroke:#f59e0b,stroke-width:2px,color:#fff
+    classDef default fill:#f9f9f9,stroke:#333,stroke-width:2px,color:#000
+    
+    class H success
+    class L warning
+```
+
+---
+
+### 5. 🔍 **`analyze-s3-logs.yml`** - Standalone Log Analysis
+**Purpose**: Analyze any S3 log file with AI  
+**Trigger**: Manual (`workflow_dispatch`)
+
+**What it does**:
+- Downloads log file from provided S3 URL
+- Runs AI analysis using AWS Bedrock & Claude Sonnet 4
+- Generates detailed incident analysis report
+- Provides structured RCA and recommendations
+
+**Inputs**:
+- `s3_object_url`: S3 URL to log file (s3:// or https:// format)
+
+**Duration**: ~2-5 minutes
+
+```mermaid
+flowchart TD
+    A[🔍 Analyze S3 Logs] --> B[Parse S3 URL]
+    B --> C[Download Log File]
+    C --> D[Validate Content]
+    D --> E[AWS Bedrock Analysis]
+    E --> F[Claude Sonnet 4]
+    F --> G[Generate RCA Report]
+    G --> H[📄 Analysis Results]
+    
+    E --> E1[Root Cause Analysis]
+    E --> E2[Timeline Reconstruction]
+    E --> E3[Impact Assessment]
+    E --> E4[Prevention Recommendations]
+    
+    classDef ai fill:#8B5CF6,stroke:#8B5CF6,stroke-width:2px,color:#fff
+    classDef default fill:#f9f9f9,stroke:#333,stroke-width:2px,color:#000
+    
+    class E,F ai
+```
+
+---
+
+### 6. 🏗️ **`build-push-deploy-app.yml`** - App-Only Deployment
+**Purpose**: Build and deploy application only (no infrastructure)  
+**Trigger**: Manual (`workflow_dispatch`)
+
+**What it does**:
+- Builds Docker image from application code
+- Pushes to existing ECR repository
+- Deploys to existing Kubernetes cluster
+- Updates application without infrastructure changes
+
+**Inputs**:
+- `image_tag`: Docker image tag (default: latest)
+- `namespace`: Kubernetes namespace (default: default)
+
+**Duration**: ~5-10 minutes
+
+```mermaid
+flowchart TD
+    A[🏗️ Build & Deploy App] --> B[Build Docker Image]
+    B --> C[Push to ECR]
+    C --> D[Update K8s Deployment]
+    D --> E[Wait for Rollout]
+    E --> F[Verify Health]
+    F --> G[✅ App Updated]
+    
+    B --> B1[Docker Build]
+    B --> B2[Tag Image]
+    
+    D --> D1[Helm Upgrade]
+    D --> D2[Rolling Update]
+    D --> D3[Health Checks]
+```
+
+---
+
+### 7. 📱 **`deploy-app-only.yml`** - Deploy Pre-built App
+**Purpose**: Deploy application using existing image  
+**Trigger**: Manual (`workflow_dispatch`)
+
+**What it does**:
+- Deploys application using specified image
+- No building - uses existing ECR image
+- Updates Kubernetes deployment only
+- Fastest deployment option
+
+**Inputs**:
+- `image_tag`: ECR image tag to deploy
+- `namespace`: Target Kubernetes namespace
+
+**Duration**: ~2-5 minutes
+
+```mermaid
+flowchart TD
+    A[📱 Deploy App Only] --> B[Verify ECR Image]
+    B --> C[Update Helm Values]
+    C --> D[Deploy to K8s]
+    D --> E[Monitor Rollout]
+    E --> F[✅ Deployment Complete]
+    
+    D --> D1[Helm Upgrade]
+    D --> D2[Pod Restart]
+    D --> D3[Service Update]
+```
+
+---
+
+## 🔄 Workflow Dependencies & Order
+
+```mermaid
+graph TB
+    subgraph "🚀 Setup Phase"
+        A[deploy.yml<br/>Complete Infrastructure]
+    end
+    
+    subgraph "🔄 Development Phase"
+        B[build-push-deploy-app.yml<br/>Build & Deploy App]
+        C[deploy-app-only.yml<br/>Deploy Existing Image]
+    end
+    
+    subgraph "🧪 Testing Phase"
+        D[incident-demo.yml<br/>Incident Simulation]
+        E[analyze-s3-logs.yml<br/>Log Analysis]
+    end
+    
+    subgraph "🧹 Cleanup Phase"
+        F[teardown.yml<br/>Destroy Infrastructure]
+        G[teardown-verify.yml<br/>Verify Cleanup]
+    end
+    
+    A --> B
+    A --> C
+    A --> D
+    D --> E
+    B --> D
+    C --> D
+    D --> F
+    F --> G
+    
+    classDef setup fill:#10B981,stroke:#10B981,stroke-width:2px,color:#fff
+    classDef testing fill:#f59e0b,stroke:#f59e0b,stroke-width:2px,color:#fff
+    classDef cleanup fill:#FF6B6B,stroke:#FF6B6B,stroke-width:2px,color:#fff
+    classDef default fill:#f9f9f9,stroke:#333,stroke-width:2px,color:#000
+    
+    class A setup
+    class D testing
+    class F cleanup
+```
+
+This diagram shows how workflows can be combined for different development scenarios and phases.
+
+---
+
+### 8. 🗑️ **`destroy-s3-buckets.yml`** - Complete S3 Cleanup
+**Purpose**: Permanently destroy ALL S3 buckets after teardown  
+**Trigger**: Manual (`workflow_dispatch`)
+
+**What it does**:
+- Lists all S3 buckets in your AWS account
+- Deletes all object versions, delete markers, and current objects
+- Permanently destroys all S3 buckets
+- Provides dry-run option for safety
+
+**Inputs**:
+- `confirm_destruction`: Must type "DELETE ALL BUCKETS" to confirm
+- `dry_run`: Show what would be deleted without actually deleting (default: true)
+
+**Duration**: ~5-15 minutes (depending on bucket contents)
+
+⚠️ **WARNING**: This action PERMANENTLY destroys ALL S3 buckets and their contents!
+
+```mermaid
+flowchart TD
+    A[🗑️ Destroy S3 Buckets] --> B[Validate Confirmation]
+    B --> C[List All Buckets]
+    C --> D{Dry Run?}
+    D -->|Yes| E[Show What Would Delete]
+    D -->|No| F[Delete All Objects]
+    F --> G[Delete All Versions]
+    G --> H[Delete All Buckets]
+    H --> I[✅ Complete Destruction]
+    E --> J[✅ Dry Run Complete]
+    
+    classDef destroy fill:#FF6B6B,stroke:#FF6B6B,stroke-width:2px,color:#fff
+    classDef warning fill:#f59e0b,stroke:#f59e0b,stroke-width:2px,color:#fff
+    classDef safe fill:#10B981,stroke:#10B981,stroke-width:2px,color:#fff
+    classDef default fill:#f9f9f9,stroke:#333,stroke-width:2px,color:#000
+    
+    class A,F,G,H,I destroy
+    class B,D warning
+    class E,J safe
+```
+
+## 🔒 Security & Best Practices
+
+### **State Management**
+- ✅ **S3 Backend**: Terraform state stored securely in encrypted S3
+- ✅ **State Locking**: DynamoDB prevents concurrent modifications
+- ✅ **Versioning**: State file history for rollback capability
+- ✅ **Isolation**: Branch-specific state keys prevent conflicts
+
+### **Secret Management**
+- ✅ **GitHub Secrets**: AWS credentials stored securely
+- ✅ **No Hardcoding**: Zero sensitive data in workflow files
+- ✅ **Output Masking**: Sensitive values automatically hidden
+- ✅ **Public Safe**: All workflows safe for public repositories
+
+### **Access Control**
+- ✅ **Manual Triggers**: All workflows require explicit execution
+- ✅ **Confirmation Gates**: Destructive actions require confirmation
+- ✅ **Audit Trail**: Complete execution history in GitHub Actions
+
 ## 💰 Cost Management
 
 ### **Estimated Costs**
-- **Running Infrastructure**: ~$4-15/day (~$120-450/month)
-- **Deployment**: ~$0.50 per deployment
-- **Incident Simulation**: ~$0.10 per simulation
-- **Teardown**: ~$0.20 per teardown
+| Component | Cost/Day | Cost/Month |
+|-----------|----------|------------|
+| EKS Cluster | $2.40 | $72 |
+| EC2 Nodes (t3.medium x2) | $3.50 | $105 |
+| Load Balancer | $0.60 | $18 |
+| Other Resources | $1.50 | $45 |
+| **Total Running** | **~$8/day** | **~$240/month** |
 
-### **Cost Optimization**
-- ✅ **Automatic Teardown**: Prevents forgotten resources
-- ✅ **Resource Verification**: Ensures complete cleanup
-- ✅ **Cost Reporting**: Shows estimated savings
-- ✅ **Efficient Workflows**: Optimized resource usage
+### **Workflow Costs**
+- Deploy: ~$0.50 per run
+- Incident Demo: ~$0.10 per run  
+- Teardown: ~$0.20 per run
+- AI Analysis: ~$0.05 per analysis
+
+## 🚀 Quick Start
+
+### **Prerequisites**
+1. Configure GitHub Secrets:
+   - `AWS_ACCESS_KEY_ID`
+   - `AWS_SECRET_ACCESS_KEY`
+2. AWS IAM permissions for EC2, EKS, ECR, S3, Lambda, DynamoDB
+3. Public repository (or GitHub Actions enabled)
+
+### **Basic Workflow**
+1. **Deploy**: Run `deploy.yml` → Wait 20-30 minutes
+2. **Test**: Run `incident-demo.yml` → Analyze results  
+3. **Iterate**: Use `build-push-deploy-app.yml` for updates
+4. **Cleanup**: Run `teardown.yml` → Verify with `teardown-verify.yml`
+
+### **Development Workflow**
+1. **Initial Setup**: `deploy.yml` (full infrastructure)
+2. **Code Changes**: `build-push-deploy-app.yml` (app only)
+3. **Quick Deploy**: `deploy-app-only.yml` (existing image)
+4. **Testing**: `incident-demo.yml` (incident simulation)
+5. **Analysis**: `analyze-s3-logs.yml` (standalone analysis)
 
 ## 🔧 Troubleshooting
 
 ### **Common Issues**
 
-#### **Workflow Fails to Start**
-- Check GitHub Secrets are configured
-- Verify AWS credentials have required permissions
-- Ensure repository is public or has GitHub Actions enabled
-
-#### **Terraform Backend Issues**
-- S3 bucket and DynamoDB table are created automatically
-- If backend init fails, check AWS permissions
-- State bucket is unique per GitHub user/org
-
-#### **Deployment Timeouts**
-- EKS cluster creation can take 10-15 minutes
-- Monitoring stack installation can take 15-20 minutes
-- Increase timeout values if needed
-
-#### **Teardown Incomplete**
-- Run `teardown-verify.yml` to check remaining resources
-- Use auto-cleanup option for stuck resources
-- Manual cleanup may be needed for some resources
+| Issue | Solution |
+|-------|----------|
+| Workflow won't start | Check GitHub Secrets configuration |
+| Terraform backend error | Verify AWS permissions for S3/DynamoDB |
+| EKS timeout | Allow 15-20 minutes for cluster creation |
+| App deployment fails | Check ECR repository exists and image is pushed |
+| AI analysis fails | Verify AWS Bedrock access in us-west-1 |
+| Incomplete teardown | Run `teardown-verify.yml` with auto-cleanup |
 
 ### **Debug Steps**
-1. **Check Workflow Logs**: Detailed logs available in GitHub Actions
-2. **Verify AWS Console**: Check resources in AWS Console
-3. **Run Verification**: Use teardown-verify workflow
-4. **Check Billing**: Monitor AWS billing dashboard
+1. Check GitHub Actions logs for detailed error messages
+2. Verify AWS Console for resource status
+3. Use `teardown-verify.yml` to check remaining resources
+4. Monitor AWS billing for unexpected charges
 
-## 🎯 Best Practices
+## 📊 Monitoring & Observability
 
-### **Development Workflow**
-1. **Deploy**: Use deploy.yml for environment setup
-2. **Test**: Run incident-demo.yml for testing
-3. **Iterate**: Make changes and redeploy as needed
-4. **Cleanup**: Always run teardown.yml when done
-
-### **Security Practices**
-1. **Rotate Credentials**: Regularly rotate AWS keys
-2. **Monitor Usage**: Check AWS CloudTrail logs
-3. **Limit Permissions**: Use least privilege principle
-4. **Review Workflows**: Regularly review workflow execution
-
-### **Cost Management**
-1. **Monitor Spending**: Set up AWS Budgets
-2. **Clean Up**: Always teardown when not in use
-3. **Verify Cleanup**: Use teardown-verify workflow
-4. **Track Usage**: Monitor workflow execution frequency
-
-## 📚 Advanced Usage
-
-### **Custom Environments**
-- Modify environment variables in workflows
-- Create additional workflow files for different environments
-- Use different AWS accounts for isolation
-
-### **Extended Monitoring**
-- Add custom Grafana dashboards
-- Configure additional Prometheus metrics
-- Set up alerting rules
-
-### **CI/CD Integration**
-- Trigger workflows from other repositories
-- Use workflow outputs in downstream processes
-- Implement approval processes for production
+After deployment, access:
+- **Application**: Service URL provided in deploy workflow output
+- **Grafana**: `http://SERVICE_URL/grafana` (admin/admin)
+- **Prometheus**: `http://SERVICE_URL/prometheus`
+- **Kubernetes Dashboard**: Token provided in workflow output
 
 ## 🤝 Contributing
 
-When contributing to workflows:
-1. **Test Thoroughly**: Test all changes in your own AWS account
-2. **Security Review**: Ensure no secrets are exposed
-3. **Documentation**: Update this README for any changes
-4. **Backward Compatibility**: Maintain compatibility with existing usage
-
-## 📞 Support
-
-For issues with workflows:
-1. **Check Logs**: Review GitHub Actions logs
-2. **Verify Setup**: Ensure prerequisites are met
-3. **Test Locally**: Test components locally if possible
-4. **Open Issue**: Create GitHub issue with detailed information
+When modifying workflows:
+1. Test thoroughly in your own AWS account
+2. Ensure no secrets are exposed in logs
+3. Update this README for any changes
+4. Maintain backward compatibility
+5. Add appropriate error handling
 
 ---
 
-**⚠️ Important**: These workflows create AWS resources that incur costs. Always run the teardown workflow when done to avoid unexpected charges!
+**⚠️ Important**: These workflows create AWS resources that incur costs. Always run teardown workflows when finished to avoid unexpected charges!
+
+**🔐 Security**: All workflows are designed for public repositories with proper secret management. Never commit AWS credentials to code.

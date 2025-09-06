@@ -16,7 +16,7 @@ on:
       duration:
         description: 'Duration in minutes'
         required: true
-        default: '3'
+        default: '1'
         type: string
       enable_ai_analysis:
         description: 'Enable AI incident analysis'
@@ -105,6 +105,7 @@ jobs:
     needs: pre-checks
     outputs:
       baseline-captured: ${{ steps.metrics.outputs.captured }}
+      incident-id: ${{ steps.metrics.outputs.incident-id }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -127,41 +128,41 @@ jobs:
           
           # Create incident directory
           INCIDENT_ID="gh-incident-$(date +%Y%m%d-%H%M%S)"
-          mkdir -p /tmp/incident-logs/$INCIDENT_ID
+          mkdir -p /tmp/incident-logs
           
           echo "🆔 Incident ID: $INCIDENT_ID"
           echo "incident-id=$INCIDENT_ID" >> $GITHUB_OUTPUT
           
           # Capture baseline state
-          echo "=== BASELINE METRICS ===" > /tmp/incident-logs/$INCIDENT_ID/baseline.log
-          echo "Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
-          echo "Incident ID: $INCIDENT_ID" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
-          echo "" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
+          echo "=== BASELINE METRICS ===" > /tmp/incident-logs/baseline-$INCIDENT_ID.log
+          echo "Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> /tmp/incident-logs/baseline-$INCIDENT_ID.log
+          echo "Incident ID: $INCIDENT_ID" >> /tmp/incident-logs/baseline-$INCIDENT_ID.log
+          echo "" >> /tmp/incident-logs/baseline-$INCIDENT_ID.log
           
           # Pod status
-          echo "=== POD STATUS ===" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
-          kubectl get pods -l app.kubernetes.io/name=${{ env.APP_NAME }} -n ${{ env.NAMESPACE }} -o wide >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
-          echo "" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
+          echo "=== POD STATUS ===" >> /tmp/incident-logs/baseline-$INCIDENT_ID.log
+          kubectl get pods -l app.kubernetes.io/name=${{ env.APP_NAME }} -n ${{ env.NAMESPACE }} -o wide >> /tmp/incident-logs/baseline-$INCIDENT_ID.log
+          echo "" >> /tmp/incident-logs/baseline-$INCIDENT_ID.log
           
           # Resource usage
-          echo "=== RESOURCE USAGE ===" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
-          kubectl top pods -l app.kubernetes.io/name=${{ env.APP_NAME }} -n ${{ env.NAMESPACE }} >> /tmp/incident-logs/$INCIDENT_ID/baseline.log 2>&1 || echo "Metrics server not available" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
-          echo "" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
+          echo "=== RESOURCE USAGE ===" >> /tmp/incident-logs/baseline-$INCIDENT_ID.log
+          kubectl top pods -l app.kubernetes.io/name=${{ env.APP_NAME }} -n ${{ env.NAMESPACE }} >> /tmp/incident-logs/baseline-$INCIDENT_ID.log 2>&1 || echo "Metrics server not available" >> /tmp/incident-logs/baseline-$INCIDENT_ID.log
+          echo "" >> /tmp/incident-logs/baseline-$INCIDENT_ID.log
           
           # Service status
-          echo "=== SERVICE STATUS ===" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
-          kubectl get svc ${{ env.APP_NAME }} -n ${{ env.NAMESPACE }} -o wide >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
-          echo "" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
+          echo "=== SERVICE STATUS ===" >> /tmp/incident-logs/baseline-$INCIDENT_ID.log
+          kubectl get svc ${{ env.APP_NAME }} -n ${{ env.NAMESPACE }} -o wide >> /tmp/incident-logs/baseline-$INCIDENT_ID.log
+          echo "" >> /tmp/incident-logs/baseline-$INCIDENT_ID.log
           
           # HPA status
-          echo "=== HPA STATUS ===" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
-          kubectl get hpa -n ${{ env.NAMESPACE }} >> /tmp/incident-logs/$INCIDENT_ID/baseline.log 2>&1 || echo "HPA not found" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
-          echo "" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
+          echo "=== HPA STATUS ===" >> /tmp/incident-logs/baseline-$INCIDENT_ID.log
+          kubectl get hpa -n ${{ env.NAMESPACE }} >> /tmp/incident-logs/baseline-$INCIDENT_ID.log 2>&1 || echo "HPA not found" >> /tmp/incident-logs/baseline-$INCIDENT_ID.log
+          echo "" >> /tmp/incident-logs/baseline-$INCIDENT_ID.log
           
           # Application health
-          echo "=== APPLICATION HEALTH ===" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
-          curl -s --max-time 10 "http://${{ needs.pre-checks.outputs.service-url }}/health" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log 2>&1 || echo "Health check failed" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
-          echo "" >> /tmp/incident-logs/$INCIDENT_ID/baseline.log
+          echo "=== APPLICATION HEALTH ===" >> /tmp/incident-logs/baseline-$INCIDENT_ID.log
+          curl -s --max-time 10 "http://${{ needs.pre-checks.outputs.service-url }}/health" >> /tmp/incident-logs/baseline-$INCIDENT_ID.log 2>&1 || echo "Health check failed" >> /tmp/incident-logs/baseline-$INCIDENT_ID.log
+          echo "" >> /tmp/incident-logs/baseline-$INCIDENT_ID.log
           
           echo "captured=true" >> $GITHUB_OUTPUT
           echo "✅ Baseline metrics captured"
@@ -179,7 +180,8 @@ jobs:
     needs: [pre-checks, baseline-metrics]
     outputs:
       incident-id: ${{ steps.incident.outputs.incident-id }}
-      logs-uploaded: ${{ steps.upload.outputs.logs-uploaded }}
+      s3-incident-url: ${{ steps.s3-upload.outputs.s3-incident-url }}
+      s3-bucket: ${{ steps.s3-upload.outputs.s3-bucket }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -209,7 +211,7 @@ jobs:
           SERVICE_URL="${{ needs.pre-checks.outputs.service-url }}"
           INCIDENT_TYPE="${{ inputs.incident_type }}"
           DURATION="${{ inputs.duration }}"
-          INCIDENT_ID="gh-incident-$(date +%Y%m%d-%H%M%S)"
+          INCIDENT_ID="${{ needs.baseline-metrics.outputs.incident-id }}"
           
           echo "🆔 Incident ID: $INCIDENT_ID"
           echo "🎯 Incident Type: $INCIDENT_TYPE"
@@ -219,21 +221,21 @@ jobs:
           echo "incident-id=$INCIDENT_ID" >> $GITHUB_OUTPUT
           
           # Create incident log directory
-          mkdir -p /tmp/incident-logs/$INCIDENT_ID
+          mkdir -p /tmp/incident-logs
           
-          # Start incident logging
-          echo "=== INCIDENT SIMULATION LOG ===" > /tmp/incident-logs/$INCIDENT_ID/incident.log
-          echo "Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
-          echo "Incident ID: $INCIDENT_ID" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
-          echo "Incident Type: $INCIDENT_TYPE" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
-          echo "Duration: $DURATION minutes" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
-          echo "Service URL: http://$SERVICE_URL" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
-          echo "" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
+          # Start incident logging (create log file in expected format)
+          echo "=== INCIDENT SIMULATION LOG ===" > /tmp/incident-logs/incident-$INCIDENT_ID.log
+          echo "Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> /tmp/incident-logs/incident-$INCIDENT_ID.log
+          echo "Incident ID: $INCIDENT_ID" >> /tmp/incident-logs/incident-$INCIDENT_ID.log
+          echo "Incident Type: $INCIDENT_TYPE" >> /tmp/incident-logs/incident-$INCIDENT_ID.log
+          echo "Duration: $DURATION minutes" >> /tmp/incident-logs/incident-$INCIDENT_ID.log
+          echo "Service URL: http://$SERVICE_URL" >> /tmp/incident-logs/incident-$INCIDENT_ID.log
+          echo "" >> /tmp/incident-logs/incident-$INCIDENT_ID.log
           
           # Function to trigger incident
           trigger_incident() {
             local type=$1
-            echo "🚨 Triggering $type incident..." >> /tmp/incident-logs/$INCIDENT_ID/incident.log
+            echo "🚨 Triggering $type incident..." >> /tmp/incident-logs/incident-$INCIDENT_ID.log
             
             case $type in
               "memory_leak")
@@ -241,75 +243,75 @@ jobs:
                 curl -X POST "http://$SERVICE_URL/api/memory-leak" \
                   -H "Content-Type: application/json" \
                   -d '{"enable": true}' \
-                  >> /tmp/incident-logs/$INCIDENT_ID/incident.log 2>&1
+                  >> /tmp/incident-logs/incident-$INCIDENT_ID.log 2>&1
                 ;;
               "cpu_stress")
                 echo "🔥 Enabling CPU stress simulation..."
                 curl -X POST "http://$SERVICE_URL/api/cpu-stress" \
                   -H "Content-Type: application/json" \
                   -d '{"enable": true}' \
-                  >> /tmp/incident-logs/$INCIDENT_ID/incident.log 2>&1
+                  >> /tmp/incident-logs/incident-$INCIDENT_ID.log 2>&1
                 ;;
               "health_failure")
                 echo "💔 Enabling health failure simulation..."
                 curl -X POST "http://$SERVICE_URL/api/failure-mode" \
                   -H "Content-Type: application/json" \
                   -d '{"mode": "health_failure"}' \
-                  >> /tmp/incident-logs/$INCIDENT_ID/incident.log 2>&1
+                  >> /tmp/incident-logs/incident-$INCIDENT_ID.log 2>&1
                 ;;
             esac
           }
           
           # Function to stop incident
           stop_incident() {
-            echo "🛑 Stopping incident simulation..." >> /tmp/incident-logs/$INCIDENT_ID/incident.log
+            echo "🛑 Stopping incident simulation..." >> /tmp/incident-logs/incident-$INCIDENT_ID.log
             
             # Stop all simulations
             curl -X POST "http://$SERVICE_URL/api/memory-leak" \
               -H "Content-Type: application/json" \
               -d '{"enable": false}' \
-              >> /tmp/incident-logs/$INCIDENT_ID/incident.log 2>&1
+              >> /tmp/incident-logs/incident-$INCIDENT_ID.log 2>&1
             
             curl -X POST "http://$SERVICE_URL/api/cpu-stress" \
               -H "Content-Type: application/json" \
               -d '{"enable": false}' \
-              >> /tmp/incident-logs/$INCIDENT_ID/incident.log 2>&1
+              >> /tmp/incident-logs/incident-$INCIDENT_ID.log 2>&1
             
             curl -X POST "http://$SERVICE_URL/api/failure-mode" \
               -H "Content-Type: application/json" \
               -d '{"mode": "none"}' \
-              >> /tmp/incident-logs/$INCIDENT_ID/incident.log 2>&1
+              >> /tmp/incident-logs/incident-$INCIDENT_ID.log 2>&1
           }
           
           # Function to collect metrics
           collect_metrics() {
             local timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-            echo "📊 Collecting metrics at $timestamp..." >> /tmp/incident-logs/$INCIDENT_ID/incident.log
+            echo "📊 Collecting metrics at $timestamp..." >> /tmp/incident-logs/incident-$INCIDENT_ID.log
             
             # Pod status
-            echo "=== POD STATUS ($timestamp) ===" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
-            kubectl get pods -l app.kubernetes.io/name=${{ env.APP_NAME }} -n ${{ env.NAMESPACE }} -o wide >> /tmp/incident-logs/$INCIDENT_ID/incident.log
+            echo "=== POD STATUS ($timestamp) ===" >> /tmp/incident-logs/incident-$INCIDENT_ID.log
+            kubectl get pods -l app.kubernetes.io/name=${{ env.APP_NAME }} -n ${{ env.NAMESPACE }} -o wide >> /tmp/incident-logs/incident-$INCIDENT_ID.log
             
             # Resource usage
-            echo "=== RESOURCE USAGE ($timestamp) ===" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
-            kubectl top pods -l app.kubernetes.io/name=${{ env.APP_NAME }} -n ${{ env.NAMESPACE }} >> /tmp/incident-logs/$INCIDENT_ID/incident.log 2>&1 || echo "Metrics server not available" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
+            echo "=== RESOURCE USAGE ($timestamp) ===" >> /tmp/incident-logs/incident-$INCIDENT_ID.log
+            kubectl top pods -l app.kubernetes.io/name=${{ env.APP_NAME }} -n ${{ env.NAMESPACE }} >> /tmp/incident-logs/incident-$INCIDENT_ID.log 2>&1 || echo "Metrics server not available" >> /tmp/incident-logs/incident-$INCIDENT_ID.log
             
             # Recent events
-            echo "=== RECENT EVENTS ($timestamp) ===" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
-            kubectl get events --sort-by='.lastTimestamp' -n ${{ env.NAMESPACE }} --field-selector involvedObject.name=${{ env.APP_NAME }} | tail -10 >> /tmp/incident-logs/$INCIDENT_ID/incident.log 2>&1
+            echo "=== RECENT EVENTS ($timestamp) ===" >> /tmp/incident-logs/incident-$INCIDENT_ID.log
+            kubectl get events --sort-by='.lastTimestamp' -n ${{ env.NAMESPACE }} --field-selector involvedObject.name=${{ env.APP_NAME }} | tail -10 >> /tmp/incident-logs/incident-$INCIDENT_ID.log 2>&1
             
             # Application health
-            echo "=== APPLICATION HEALTH ($timestamp) ===" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
-            curl -s --max-time 5 "http://$SERVICE_URL/health" >> /tmp/incident-logs/$INCIDENT_ID/incident.log 2>&1 || echo "Health check failed" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
+            echo "=== APPLICATION HEALTH ($timestamp) ===" >> /tmp/incident-logs/incident-$INCIDENT_ID.log
+            curl -s --max-time 5 "http://$SERVICE_URL/health" >> /tmp/incident-logs/incident-$INCIDENT_ID.log 2>&1 || echo "Health check failed" >> /tmp/incident-logs/incident-$INCIDENT_ID.log
             
-            echo "" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
+            echo "" >> /tmp/incident-logs/incident-$INCIDENT_ID.log
           }
           
           # Trigger incidents based on type
           if [ "$INCIDENT_TYPE" = "all_scenarios" ]; then
             echo "🎭 Running all incident scenarios..."
             for scenario in "memory_leak" "cpu_stress" "health_failure"; do
-              echo "--- Starting $scenario scenario ---" >> /tmp/incident-logs/$INCIDENT_ID/incident.log
+              echo "--- Starting $scenario scenario ---" >> /tmp/incident-logs/incident-$INCIDENT_ID.log
               trigger_incident $scenario
               sleep 30
               collect_metrics
@@ -351,8 +353,8 @@ jobs:
           INCIDENT_ID="${{ steps.incident.outputs.incident-id }}"
           
           # Get pod logs
-          echo "=== APPLICATION LOGS ===" > /tmp/incident-logs/$INCIDENT_ID/pod-logs.log
-          kubectl logs -l app.kubernetes.io/name=${{ env.APP_NAME }} -n ${{ env.NAMESPACE }} --tail=500 >> /tmp/incident-logs/$INCIDENT_ID/pod-logs.log 2>&1 || echo "Failed to collect pod logs" >> /tmp/incident-logs/$INCIDENT_ID/pod-logs.log
+          echo "=== APPLICATION LOGS ===" > /tmp/incident-logs/pod-logs-$INCIDENT_ID.log
+          kubectl logs -l app.kubernetes.io/name=${{ env.APP_NAME }} -n ${{ env.NAMESPACE }} --tail=500 >> /tmp/incident-logs/pod-logs-$INCIDENT_ID.log 2>&1 || echo "Failed to collect pod logs" >> /tmp/incident-logs/pod-logs-$INCIDENT_ID.log
           
           echo "✅ Pod logs collected"
 
@@ -385,8 +387,31 @@ jobs:
             }'
           fi
           
-          # Upload logs
-          aws s3 cp /tmp/incident-logs/$INCIDENT_ID/ s3://$S3_BUCKET/incidents/$INCIDENT_ID/ --recursive
+          # Upload logs (check files exist first)
+          echo "🔍 Checking available log files..."
+          ls -la /tmp/incident-logs/ || echo "No log files found"
+          
+          echo "📤 Uploading logs to S3..."
+          if [ -f "/tmp/incident-logs/incident-$INCIDENT_ID.log" ]; then
+            aws s3 cp /tmp/incident-logs/incident-$INCIDENT_ID.log s3://$S3_BUCKET/incidents/$INCIDENT_ID/incident.log
+            echo "✅ Incident log uploaded"
+          else
+            echo "⚠️ Incident log not found: /tmp/incident-logs/incident-$INCIDENT_ID.log"
+          fi
+          
+          if [ -f "/tmp/incident-logs/baseline-$INCIDENT_ID.log" ]; then
+            aws s3 cp /tmp/incident-logs/baseline-$INCIDENT_ID.log s3://$S3_BUCKET/incidents/$INCIDENT_ID/baseline.log
+            echo "✅ Baseline log uploaded"
+          else
+            echo "⚠️ Baseline log not found: /tmp/incident-logs/baseline-$INCIDENT_ID.log"
+          fi
+          
+          if [ -f "/tmp/incident-logs/pod-logs-$INCIDENT_ID.log" ]; then
+            aws s3 cp /tmp/incident-logs/pod-logs-$INCIDENT_ID.log s3://$S3_BUCKET/incidents/$INCIDENT_ID/pod-logs.log
+            echo "✅ Pod logs uploaded"
+          else
+            echo "⚠️ Pod logs not found: /tmp/incident-logs/pod-logs-$INCIDENT_ID.log"
+          fi
           
           # Generate S3 URLs for AI analysis
           S3_INCIDENT_URL="https://$S3_BUCKET.s3.${{ env.AWS_REGION }}.amazonaws.com/incidents/$INCIDENT_ID/incident.log"
@@ -419,65 +444,221 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-west-1  # Bedrock region
 
-      - name: Download Incident Logs
-        uses: actions/download-artifact@v4
-        with:
-          name: incident-logs-${{ needs.simulate-incident.outputs.incident-id }}
-          path: /tmp/incident-logs/
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq curl unzip
 
-      - name: Run AI Analysis
+      - name: Extract S3 info and download log
+        id: s3-download
         run: |
           echo "🤖 Running AI incident analysis..."
           INCIDENT_ID="${{ needs.simulate-incident.outputs.incident-id }}"
+          S3_INCIDENT_URL="${{ needs.simulate-incident.outputs.s3-incident-url }}"
+          S3_BUCKET="${{ needs.simulate-incident.outputs.s3-bucket }}"
           
-          # Check if analyze script exists
-          if [ -f "scripts/analyze-incident-bedrock.sh" ]; then
-            echo "🔍 Using local analysis script..."
-            chmod +x scripts/analyze-incident-bedrock.sh
-            
-            # Set up environment for the script
-            export INCIDENT_ID="$INCIDENT_ID"
-            export LOG_DIR="/tmp/incident-logs"
-            
-            # Run analysis
-            ./scripts/analyze-incident-bedrock.sh || echo "⚠️ AI analysis failed, but continuing..."
-            
-            # Check if results were generated
-            if [ -f "bedrock-analysis/bedrock_response_*.json" ]; then
-              echo "✅ AI analysis completed successfully"
-              
-              # Create human-readable summary
-              echo "## 🤖 AI Incident Analysis Results" > /tmp/ai-analysis-summary.md
-              echo "" >> /tmp/ai-analysis-summary.md
-              echo "**Incident ID:** $INCIDENT_ID" >> /tmp/ai-analysis-summary.md
-              echo "**Analysis Time:** $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> /tmp/ai-analysis-summary.md
-              echo "" >> /tmp/ai-analysis-summary.md
-              
-              # Extract key findings (if possible)
-              if command -v jq >/dev/null 2>&1; then
-                LATEST_RESPONSE=$(ls -t bedrock-analysis/bedrock_response_*.json | head -1)
-                if [ -f "$LATEST_RESPONSE" ]; then
-                  echo "### Key Findings" >> /tmp/ai-analysis-summary.md
-                  echo "\`\`\`json" >> /tmp/ai-analysis-summary.md
-                  jq -r '.content[0].text' "$LATEST_RESPONSE" | head -50 >> /tmp/ai-analysis-summary.md 2>/dev/null || echo "Analysis content available in artifacts" >> /tmp/ai-analysis-summary.md
-                  echo "\`\`\`" >> /tmp/ai-analysis-summary.md
-                fi
-              fi
-            else
-              echo "⚠️ AI analysis did not generate expected results"
-            fi
-          else
-            echo "⚠️ AI analysis script not found, skipping analysis"
+          echo "🔍 Debug info:"
+          echo "  Incident ID: '$INCIDENT_ID'"
+          echo "  S3 URL: '$S3_INCIDENT_URL'"
+          echo "  S3 Bucket: '$S3_BUCKET'"
+          
+          if [ -z "$S3_INCIDENT_URL" ]; then
+            echo "❌ ERROR: Missing S3 incident URL from simulate-incident job!"
+            echo "Available outputs:"
+            echo "  incident-id: '${{ needs.simulate-incident.outputs.incident-id }}'"
+            echo "  s3-incident-url: '${{ needs.simulate-incident.outputs.s3-incident-url }}'"
+            echo "  s3-bucket: '${{ needs.simulate-incident.outputs.s3-bucket }}'"
+            exit 1
           fi
+          
+          if [ -z "$INCIDENT_ID" ]; then
+            echo "⚠️ WARNING: Incident ID is empty, using timestamp fallback"
+            INCIDENT_ID="fallback-$(date +%Y%m%d-%H%M%S)"
+          fi
+          
+          # Extract S3 bucket and key from URL
+          if [[ "$S3_INCIDENT_URL" == https://*.s3.*.amazonaws.com/* ]]; then
+            BUCKET=$(echo "$S3_INCIDENT_URL" | sed 's|https://||' | cut -d'.' -f1)
+            KEY=$(echo "$S3_INCIDENT_URL" | sed 's|https://[^/]*/||')
+          else
+            echo "❌ ERROR: Invalid S3 URL format: $S3_INCIDENT_URL"
+            exit 1
+          fi
+          
+          echo "📥 Downloading incident log from S3..."
+          echo "  Bucket: $BUCKET"
+          echo "  Key: $KEY"
+          
+          aws s3 cp "s3://$BUCKET/$KEY" ./incident-log.log
+          
+          echo "📊 Log file info:"
+          echo "  Size: $(wc -c < incident-log.log) bytes"
+          echo "  Lines: $(wc -l < incident-log.log)"
+          
+          # Set outputs
+          echo "incident-id=$INCIDENT_ID" >> $GITHUB_OUTPUT
+          echo "log-downloaded=true" >> $GITHUB_OUTPUT
+
+      - name: Run Bedrock Analysis
+        id: bedrock
+        run: |
+          echo "🧠 Running AI analysis with AWS Bedrock..."
+          
+          # Create the analysis script using the proven approach from analyze-s3-logs.yml
+          cat > analyze-log.sh << 'EOF'
+          #!/bin/bash
+          
+          # Configuration
+          AWS_REGION="us-west-1"
+          BEDROCK_MODEL="us.anthropic.claude-sonnet-4-20250514-v1:0"
+          LOG_FILE="./incident-log.log"
+          
+          echo "📖 Reading log file..."
+          if [ ! -f "$LOG_FILE" ]; then
+            echo "❌ Log file not found: $LOG_FILE"
+            exit 1
+          fi
+          
+          # Read log content
+          LOGS_CONTENT=$(cat "$LOG_FILE")
+          LOG_SIZE=$(echo "$LOGS_CONTENT" | wc -c)
+          echo "✅ Log content loaded (size: $LOG_SIZE characters)"
+          
+          # Create analysis prompt using temporary file to avoid JSON escaping issues
+          TEMP_PROMPT_FILE="./bedrock_prompt_$$.txt"
+          cat > "$TEMP_PROMPT_FILE" << 'PROMPT_EOF'
+          You are an expert SRE (Site Reliability Engineer) analyzing a Kubernetes incident. Please analyze the following incident log data and provide a comprehensive incident analysis report.
+          
+          Please provide your analysis in the following structured format:
+          
+          ## 📊 INCIDENT SUMMARY
+          - **Type**: [Brief description of incident type]
+          - **Severity**: [LOW|MEDIUM|HIGH|CRITICAL]
+          - **Duration**: [Estimated duration]
+          - **Affected Services**: [List of affected services]
+          
+          ## 🔍 ROOT CAUSE ANALYSIS
+          - **Primary Cause**: [Main root cause]
+          - **Contributing Factors**: [List of contributing factors]
+          
+          ## ⚡ IMMEDIATE FIXES APPLIED
+          - [List of immediate actions taken during the incident]
+          
+          ## 🛡️ PREVENTIVE MEASURES
+          - [List of measures to prevent similar incidents]
+          
+          ## 📚 LESSONS LEARNED
+          - [Key lessons from this incident]
+          
+          ## 🎯 RECOMMENDATIONS
+          - **Monitoring**: [Monitoring improvements]
+          - **Alerting**: [Alerting improvements]
+          - **Process**: [Process improvements]
+          - **Infrastructure**: [Infrastructure improvements]
+          
+          Focus on being specific and actionable in your recommendations.
+          
+          INCIDENT LOG DATA:
+          PROMPT_EOF
+          
+          # Append the log content to the prompt file
+          echo "$LOGS_CONTENT" >> "$TEMP_PROMPT_FILE"
+          
+          # Read the complete prompt
+          ANALYSIS_PROMPT=$(cat "$TEMP_PROMPT_FILE")
+          
+          # Create the Bedrock request payload file using jq to properly escape content
+          BEDROCK_PAYLOAD_FILE="./bedrock_payload_$$.json"
+          cat > "$BEDROCK_PAYLOAD_FILE" << PAYLOAD_EOF
+          {
+            "anthropic_version": "bedrock-2023-05-31",
+            "messages": [
+              {
+                "role": "user",
+                "content": $(echo "$ANALYSIS_PROMPT" | jq -Rs .)
+              }
+            ],
+            "temperature": 0.3,
+            "max_tokens": 4000
+          }
+          PAYLOAD_EOF
+          
+          echo "🚀 Sending request to Bedrock..."
+          
+          # Call Bedrock using the working method
+          if aws bedrock-runtime invoke-model \
+            --region "$AWS_REGION" \
+            --cli-binary-format raw-in-base64-out \
+            --model-id "$BEDROCK_MODEL" \
+            --content-type application/json \
+            --accept application/json \
+            --body "file://$BEDROCK_PAYLOAD_FILE" \
+            bedrock-response.json; then
+              
+              echo "✅ Bedrock analysis completed successfully!"
+              
+              # Parse and display results
+              RESPONSE_CONTENT=$(cat bedrock-response.json)
+              
+              if command -v jq &> /dev/null; then
+                  # Extract the analysis text
+                  ANALYSIS_TEXT=$(echo "$RESPONSE_CONTENT" | jq -r '.content[0].text // empty')
+                  
+                  if [ -n "$ANALYSIS_TEXT" ]; then
+                      echo ""
+                      echo "📊 INCIDENT ANALYSIS RESULTS"
+                      echo "============================"
+                      echo "$ANALYSIS_TEXT"
+                      echo "============================"
+                      echo ""
+                      
+                      # Save formatted results
+                      echo "# 🤖 AI Incident Analysis Report" > analysis-results.txt
+                      echo "" >> analysis-results.txt
+                      echo "**Generated:** $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> analysis-results.txt
+                      echo "**Model:** $BEDROCK_MODEL" >> analysis-results.txt
+                      echo "**Incident ID:** $INCIDENT_ID" >> analysis-results.txt
+                      echo "" >> analysis-results.txt
+                      echo "$ANALYSIS_TEXT" >> analysis-results.txt
+                      
+                      echo "✅ Full analysis saved to analysis-results.txt"
+                      
+                  else
+                      echo "❌ No response content found"
+                      cat bedrock-response.json
+                      exit 1
+                  fi
+              else
+                  echo "⚠️ jq not available, showing raw response:"
+                  cat bedrock-response.json
+                  cat bedrock-response.json > analysis-results.txt
+              fi
+              
+              # Clean up temporary files
+              rm -f "$TEMP_PROMPT_FILE" "$BEDROCK_PAYLOAD_FILE"
+              
+              echo "analysis-completed=true" >> $GITHUB_OUTPUT
+              
+          else
+              echo "❌ Bedrock analysis failed"
+              echo "analysis-completed=false" >> $GITHUB_OUTPUT
+              exit 1
+          fi
+          EOF
+          
+          chmod +x analyze-log.sh
+          ./analyze-log.sh
 
       - name: Upload AI Analysis Results
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ai-analysis-${{ needs.simulate-incident.outputs.incident-id }}
+          name: ai-analysis-${{ steps.s3-download.outputs.incident-id }}
           path: |
-            bedrock-analysis/
-            /tmp/ai-analysis-summary.md
+            bedrock-response.json
+            incident-log.log
+            analysis-results.txt
+            bedrock-payload.json
           retention-days: 30
 
   generate-summary:

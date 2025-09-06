@@ -1,0 +1,182 @@
+name: Destroy S3 buckets After Teardown.yml
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_destruction:
+        description: 'Type "DELETE ALL BUCKETS" to confirm complete S3 bucket destruction'
+        required: true
+        type: string
+      dry_run:
+        description: 'Dry run - show what would be deleted without actually deleting'
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  destroy-s3-buckets:
+    name: 🗑️ Destroy All S3 Buckets
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-west-1
+        
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y jq
+        
+    - name: Validate confirmation input
+      run: |
+        if [ "${{ inputs.confirm_destruction }}" != "DELETE ALL BUCKETS" ]; then
+          echo "❌ ERROR: Confirmation phrase not provided correctly"
+          echo "Please type exactly: DELETE ALL BUCKETS"
+          exit 1
+        fi
+        echo "✅ Confirmation validated"
+        
+    - name: List all S3 buckets
+      run: |
+        echo "🔍 Listing all S3 buckets in your AWS account..."
+        aws s3api list-buckets --query 'Buckets[*].{Name:Name,CreationDate:CreationDate}' --output table
+        
+        BUCKET_COUNT=$(aws s3api list-buckets --query 'length(Buckets)')
+        echo ""
+        echo "📊 Total buckets found: $BUCKET_COUNT"
+        
+    - name: Destroy S3 buckets (Dry Run)
+      if: inputs.dry_run == true
+      run: |
+        echo "🧪 DRY RUN MODE - No actual deletion will occur"
+        echo "=================================="
+        
+        BUCKETS=$(aws s3api list-buckets --query 'Buckets[*].Name' --output text)
+        
+        if [ -z "$BUCKETS" ]; then
+          echo "✅ No S3 buckets found to delete"
+          exit 0
+        fi
+        
+        echo "The following buckets WOULD be deleted:"
+        for bucket in $BUCKETS; do
+          echo "🗑️  Would delete bucket: $bucket"
+          
+          # Show objects that would be deleted
+          OBJECT_COUNT=$(aws s3api list-objects-v2 --bucket "$bucket" --query 'length(Contents)' 2>/dev/null || echo "0")
+          if [ "$OBJECT_COUNT" != "0" ] && [ "$OBJECT_COUNT" != "null" ]; then
+            echo "   📄 Contains $OBJECT_COUNT objects that would be deleted"
+          fi
+          
+          # Show versions that would be deleted
+          VERSION_COUNT=$(aws s3api list-object-versions --bucket "$bucket" --query 'length(Versions)' 2>/dev/null || echo "0")
+          if [ "$VERSION_COUNT" != "0" ] && [ "$VERSION_COUNT" != "null" ]; then
+            echo "   📦 Contains $VERSION_COUNT object versions that would be deleted"
+          fi
+          
+          # Show delete markers that would be deleted
+          DELETE_MARKER_COUNT=$(aws s3api list-object-versions --bucket "$bucket" --query 'length(DeleteMarkers)' 2>/dev/null || echo "0")
+          if [ "$DELETE_MARKER_COUNT" != "0" ] && [ "$DELETE_MARKER_COUNT" != "null" ]; then
+            echo "   🏷️  Contains $DELETE_MARKER_COUNT delete markers that would be removed"
+          fi
+          
+          echo ""
+        done
+        
+        echo "=================================="
+        echo "🧪 DRY RUN COMPLETE - No changes made"
+        echo "To actually delete buckets, set 'dry_run' to false"
+        
+    - name: Destroy S3 buckets (REAL DELETION)
+      if: inputs.dry_run == false
+      run: |
+        echo "🚨 REAL DELETION MODE - Permanently destroying all S3 buckets"
+        echo "============================================================="
+        
+        BUCKETS=$(aws s3api list-buckets --query 'Buckets[*].Name' --output text)
+        
+        if [ -z "$BUCKETS" ]; then
+          echo "✅ No S3 buckets found to delete"
+          exit 0
+        fi
+        
+        DELETED_COUNT=0
+        FAILED_COUNT=0
+        
+        for bucket in $BUCKETS; do
+          echo ""
+          echo "🗑️  Destroying bucket: $bucket"
+          
+          # Step 1: Delete all object versions and delete markers
+          echo "   📄 Deleting all object versions and delete markers..."
+          aws s3api list-object-versions --bucket "$bucket" --query '{Objects: Versions[].{Key:Key,VersionId:VersionId}}' --output json > /tmp/versions.json 2>/dev/null || echo '{"Objects": []}' > /tmp/versions.json
+          aws s3api list-object-versions --bucket "$bucket" --query '{Objects: DeleteMarkers[].{Key:Key,VersionId:VersionId}}' --output json > /tmp/delete-markers.json 2>/dev/null || echo '{"Objects": []}' > /tmp/delete-markers.json
+          
+          # Delete versions if they exist
+          if [ "$(jq '.Objects | length' /tmp/versions.json)" -gt 0 ]; then
+            aws s3api delete-objects --bucket "$bucket" --delete file:///tmp/versions.json --quiet || echo "   ⚠️  Some versions could not be deleted"
+          fi
+          
+          # Delete delete markers if they exist
+          if [ "$(jq '.Objects | length' /tmp/delete-markers.json)" -gt 0 ]; then
+            aws s3api delete-objects --bucket "$bucket" --delete file:///tmp/delete-markers.json --quiet || echo "   ⚠️  Some delete markers could not be removed"
+          fi
+          
+          # Step 2: Delete all current objects
+          echo "   📦 Deleting all current objects..."
+          aws s3 rm "s3://$bucket" --recursive --quiet || echo "   ⚠️  Some objects could not be deleted"
+          
+          # Step 3: Delete the bucket itself
+          echo "   🗑️  Deleting bucket..."
+          if aws s3api delete-bucket --bucket "$bucket" 2>/dev/null; then
+            echo "   ✅ Successfully deleted bucket: $bucket"
+            ((DELETED_COUNT++))
+          else
+            echo "   ❌ Failed to delete bucket: $bucket"
+            ((FAILED_COUNT++))
+          fi
+        done
+        
+        echo ""
+        echo "============================================================="
+        echo "📊 DESTRUCTION SUMMARY:"
+        echo "   ✅ Buckets successfully deleted: $DELETED_COUNT"
+        echo "   ❌ Buckets failed to delete: $FAILED_COUNT"
+        
+        if [ $FAILED_COUNT -gt 0 ]; then
+          echo ""
+          echo "⚠️  Some buckets could not be deleted. Common reasons:"
+          echo "   - Bucket has a deletion policy"
+          echo "   - Bucket is not empty (objects still exist)"
+          echo "   - Insufficient permissions"
+          echo "   - Bucket is being used by other AWS services"
+          echo ""
+          echo "🔍 Remaining buckets:"
+          aws s3api list-buckets --query 'Buckets[*].Name' --output table
+        else
+          echo ""
+          echo "🎉 ALL S3 BUCKETS HAVE BEEN PERMANENTLY DESTROYED!"
+        fi
+        
+        # Clean up temp files
+        rm -f /tmp/versions.json /tmp/delete-markers.json
+        
+    - name: Final verification
+      run: |
+        echo ""
+        echo "🔍 Final S3 bucket verification..."
+        REMAINING_BUCKETS=$(aws s3api list-buckets --query 'length(Buckets)')
+        
+        if [ "$REMAINING_BUCKETS" = "0" ]; then
+          echo "✅ SUCCESS: No S3 buckets remain in your AWS account"
+        else
+          echo "⚠️  WARNING: $REMAINING_BUCKETS bucket(s) still exist:"
+          aws s3api list-buckets --query 'Buckets[*].Name' --output table
+        fi
