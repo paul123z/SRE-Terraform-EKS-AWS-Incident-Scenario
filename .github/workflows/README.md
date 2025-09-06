@@ -373,6 +373,48 @@ graph TB
 
 This diagram shows how workflows can be combined for different development scenarios and phases.
 
+---
+
+### 8. 🗑️ **`destroy-s3-buckets.yml`** - Complete S3 Cleanup
+**Purpose**: Permanently destroy ALL S3 buckets after teardown  
+**Trigger**: Manual (`workflow_dispatch`)
+
+**What it does**:
+- Lists all S3 buckets in your AWS account
+- Deletes all object versions, delete markers, and current objects
+- Permanently destroys all S3 buckets
+- Provides dry-run option for safety
+
+**Inputs**:
+- `confirm_destruction`: Must type "DELETE ALL BUCKETS" to confirm
+- `dry_run`: Show what would be deleted without actually deleting (default: true)
+
+**Duration**: ~5-15 minutes (depending on bucket contents)
+
+⚠️ **WARNING**: This action PERMANENTLY destroys ALL S3 buckets and their contents!
+
+```mermaid
+flowchart TD
+    A[🗑️ Destroy S3 Buckets] --> B[Validate Confirmation]
+    B --> C[List All Buckets]
+    C --> D{Dry Run?}
+    D -->|Yes| E[Show What Would Delete]
+    D -->|No| F[Delete All Objects]
+    F --> G[Delete All Versions]
+    G --> H[Delete All Buckets]
+    H --> I[✅ Complete Destruction]
+    E --> J[✅ Dry Run Complete]
+    
+    classDef destroy fill:#FF6B6B,stroke:#FF6B6B,stroke-width:2px,color:#fff
+    classDef warning fill:#f59e0b,stroke:#f59e0b,stroke-width:2px,color:#fff
+    classDef safe fill:#10B981,stroke:#10B981,stroke-width:2px,color:#fff
+    classDef default fill:#f9f9f9,stroke:#333,stroke-width:2px,color:#000
+    
+    class A,F,G,H,I destroy
+    class B,D warning
+    class E,J safe
+```
+
 ## 🔒 Security & Best Practices
 
 ### **State Management**

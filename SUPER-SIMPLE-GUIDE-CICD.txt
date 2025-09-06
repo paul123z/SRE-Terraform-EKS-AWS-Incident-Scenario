@@ -32,3 +32,4 @@ Terraform Destroy Teardown Job: https://github.com/paul123z/SRE-Terraform-EKS-AW
 Verify Teardown Job: https://github.com/paul123z/SRE-Terraform-EKS-AWS-Incident-Scenario/actions/workflows/teardown-verify.yml
 
 Delete S3 Buckets manually via AWS Web console
+Optional: run 'Destroy S3 buckets After Teardown.yml' github action job to delete buckets
