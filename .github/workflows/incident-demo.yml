@@ -504,13 +504,14 @@ jobs:
         run: |
           echo "🧠 Running AI analysis with AWS Bedrock..."
           
-          # Create the analysis script inline (based on analyze-s3-logs.yml approach)
+          # Create the analysis script using the proven approach from analyze-s3-logs.yml
           cat > analyze-log.sh << 'EOF'
           #!/bin/bash
           
           # Configuration
+          AWS_REGION="us-west-1"
           BEDROCK_MODEL="us.anthropic.claude-sonnet-4-20250514-v1:0"
-          LOG_FILE="incident-log.log"
+          LOG_FILE="./incident-log.log"
           
           echo "📖 Reading log file..."
           if [ ! -f "$LOG_FILE" ]; then
@@ -518,53 +519,130 @@ jobs:
             exit 1
           fi
           
-          LOG_CONTENT=$(cat "$LOG_FILE")
-          echo "✅ Log content loaded ($(echo "$LOG_CONTENT" | wc -c) characters)"
+          # Read log content
+          LOGS_CONTENT=$(cat "$LOG_FILE")
+          LOG_SIZE=$(echo "$LOGS_CONTENT" | wc -c)
+          echo "✅ Log content loaded (size: $LOG_SIZE characters)"
           
-          # Create Bedrock payload
-          cat > bedrock-payload.json << EOL
+          # Create analysis prompt using temporary file to avoid JSON escaping issues
+          TEMP_PROMPT_FILE="./bedrock_prompt_$$.txt"
+          cat > "$TEMP_PROMPT_FILE" << 'PROMPT_EOF'
+          You are an expert SRE (Site Reliability Engineer) analyzing a Kubernetes incident. Please analyze the following incident log data and provide a comprehensive incident analysis report.
+          
+          Please provide your analysis in the following structured format:
+          
+          ## 📊 INCIDENT SUMMARY
+          - **Type**: [Brief description of incident type]
+          - **Severity**: [LOW|MEDIUM|HIGH|CRITICAL]
+          - **Duration**: [Estimated duration]
+          - **Affected Services**: [List of affected services]
+          
+          ## 🔍 ROOT CAUSE ANALYSIS
+          - **Primary Cause**: [Main root cause]
+          - **Contributing Factors**: [List of contributing factors]
+          
+          ## ⚡ IMMEDIATE FIXES APPLIED
+          - [List of immediate actions taken during the incident]
+          
+          ## 🛡️ PREVENTIVE MEASURES
+          - [List of measures to prevent similar incidents]
+          
+          ## 📚 LESSONS LEARNED
+          - [Key lessons from this incident]
+          
+          ## 🎯 RECOMMENDATIONS
+          - **Monitoring**: [Monitoring improvements]
+          - **Alerting**: [Alerting improvements]
+          - **Process**: [Process improvements]
+          - **Infrastructure**: [Infrastructure improvements]
+          
+          Focus on being specific and actionable in your recommendations.
+          
+          INCIDENT LOG DATA:
+          PROMPT_EOF
+          
+          # Append the log content to the prompt file
+          echo "$LOGS_CONTENT" >> "$TEMP_PROMPT_FILE"
+          
+          # Read the complete prompt
+          ANALYSIS_PROMPT=$(cat "$TEMP_PROMPT_FILE")
+          
+          # Create the Bedrock request payload file using jq to properly escape content
+          BEDROCK_PAYLOAD_FILE="./bedrock_payload_$$.json"
+          cat > "$BEDROCK_PAYLOAD_FILE" << PAYLOAD_EOF
           {
             "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 4000,
             "messages": [
               {
                 "role": "user",
-                "content": "You are an expert Site Reliability Engineer (SRE) and incident response specialist. Analyze the following incident log and provide a comprehensive analysis including:\n\n1. **Incident Summary**: Brief overview of what happened\n2. **Root Cause Analysis**: Identify the primary cause\n3. **Timeline**: Key events and timestamps\n4. **Impact Assessment**: What was affected and severity\n5. **Resolution Steps**: What was done to resolve it\n6. **Prevention Recommendations**: How to prevent similar incidents\n7. **Monitoring Improvements**: Suggested alerts or metrics\n\nIncident Log:\n\`\`\`\n$LOG_CONTENT\n\`\`\`\n\nProvide your analysis in a structured, actionable format suitable for an incident report."
+                "content": $(echo "$ANALYSIS_PROMPT" | jq -Rs .)
               }
-            ]
+            ],
+            "temperature": 0.3,
+            "max_tokens": 4000
           }
-          EOL
+          PAYLOAD_EOF
           
           echo "🚀 Sending request to Bedrock..."
-          aws bedrock-runtime invoke-model \
+          
+          # Call Bedrock using the working method
+          if aws bedrock-runtime invoke-model \
+            --region "$AWS_REGION" \
+            --cli-binary-format raw-in-base64-out \
             --model-id "$BEDROCK_MODEL" \
             --content-type application/json \
             --accept application/json \
-            --body file://bedrock-payload.json \
-            bedrock-response.json
-          
-          if [ $? -eq 0 ]; then
-            echo "✅ Bedrock analysis completed successfully"
-            
-            # Extract and display the analysis
-            echo "📋 AI Analysis Results:"
-            echo "========================"
-            jq -r '.content[0].text' bedrock-response.json
-            echo "========================"
-            
-            # Save formatted results
-            echo "# 🤖 AI Incident Analysis Report" > analysis-results.txt
-            echo "" >> analysis-results.txt
-            echo "**Generated:** $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> analysis-results.txt
-            echo "**Model:** $BEDROCK_MODEL" >> analysis-results.txt
-            echo "" >> analysis-results.txt
-            jq -r '.content[0].text' bedrock-response.json >> analysis-results.txt
-            
-            echo "analysis-completed=true" >> $GITHUB_OUTPUT
+            --body "file://$BEDROCK_PAYLOAD_FILE" \
+            bedrock-response.json; then
+              
+              echo "✅ Bedrock analysis completed successfully!"
+              
+              # Parse and display results
+              RESPONSE_CONTENT=$(cat bedrock-response.json)
+              
+              if command -v jq &> /dev/null; then
+                  # Extract the analysis text
+                  ANALYSIS_TEXT=$(echo "$RESPONSE_CONTENT" | jq -r '.content[0].text // empty')
+                  
+                  if [ -n "$ANALYSIS_TEXT" ]; then
+                      echo ""
+                      echo "📊 INCIDENT ANALYSIS RESULTS"
+                      echo "============================"
+                      echo "$ANALYSIS_TEXT"
+                      echo "============================"
+                      echo ""
+                      
+                      # Save formatted results
+                      echo "# 🤖 AI Incident Analysis Report" > analysis-results.txt
+                      echo "" >> analysis-results.txt
+                      echo "**Generated:** $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> analysis-results.txt
+                      echo "**Model:** $BEDROCK_MODEL" >> analysis-results.txt
+                      echo "**Incident ID:** $INCIDENT_ID" >> analysis-results.txt
+                      echo "" >> analysis-results.txt
+                      echo "$ANALYSIS_TEXT" >> analysis-results.txt
+                      
+                      echo "✅ Full analysis saved to analysis-results.txt"
+                      
+                  else
+                      echo "❌ No response content found"
+                      cat bedrock-response.json
+                      exit 1
+                  fi
+              else
+                  echo "⚠️ jq not available, showing raw response:"
+                  cat bedrock-response.json
+                  cat bedrock-response.json > analysis-results.txt
+              fi
+              
+              # Clean up temporary files
+              rm -f "$TEMP_PROMPT_FILE" "$BEDROCK_PAYLOAD_FILE"
+              
+              echo "analysis-completed=true" >> $GITHUB_OUTPUT
+              
           else
-            echo "❌ Bedrock analysis failed"
-            echo "analysis-completed=false" >> $GITHUB_OUTPUT
-            exit 1
+              echo "❌ Bedrock analysis failed"
+              echo "analysis-completed=false" >> $GITHUB_OUTPUT
+              exit 1
           fi
           EOF
           
