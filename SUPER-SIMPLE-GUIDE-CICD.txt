@@ -11,7 +11,7 @@ Username: admin
 Password: admin123
 
 kubectl proxy
-http://localhost:8001/api/v1/namespaces/kubernetes-dashboard/services/https:kubernetes-dashboard:/proxy/#/login
+URL: http://localhost:8001/api/v1/namespaces/kubernetes-dashboard/services/https:kubernetes-dashboard:/proxy/#/login
 
 generate token:
 ./scripts/get-dashboard-token.sh
@@ -21,7 +21,8 @@ kubectl get hpa -A
 
 Run Github Action https://github.com/paul123z/SRE-Terraform-EKS-AWS-Incident-Scenario/actions/workflows/incident-demo.yml
 Run workflow: Incident Simulation Demo
-Monitor Memory via 'Dashboard Kubernetes / Compute Resources / Namespace (Pods)'
+Monitor Memory via Grafana Dashboard: 'Dashboard Kubernetes / Compute Resources / Namespace (Pods)'
+Check results of AI log analysis in job stage: '🤖 AI Incident Analysis'
 
 Run Remaining Github Actions:
 Optional to AI analyze log by providing exact S3 Object URL  https://github.com/paul123z/SRE-Terraform-EKS-AWS-Incident-Scenario/actions/workflows/analyze-s3-logs.yml
