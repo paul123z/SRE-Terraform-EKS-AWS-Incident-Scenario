@@ -15,4 +15,4 @@ aws bedrock-runtime invoke-model \
     "temperature": 0.7,
     "max_tokens": 500
   }' \
-  response.json
+  bedrock-curl-RESPONSE.json
