@@ -121,17 +121,17 @@ jobs:
           
           # Delete versions if they exist
           if [ "$(jq '.Objects | length' /tmp/versions.json)" -gt 0 ]; then
-            aws s3api delete-objects --bucket "$bucket" --delete file:///tmp/versions.json --quiet || echo "   ⚠️  Some versions could not be deleted"
+            aws s3api delete-objects --bucket "$bucket" --delete file:///tmp/versions.json > /dev/null 2>&1 || echo "   ⚠️  Some versions could not be deleted"
           fi
           
           # Delete delete markers if they exist
           if [ "$(jq '.Objects | length' /tmp/delete-markers.json)" -gt 0 ]; then
-            aws s3api delete-objects --bucket "$bucket" --delete file:///tmp/delete-markers.json --quiet || echo "   ⚠️  Some delete markers could not be removed"
+            aws s3api delete-objects --bucket "$bucket" --delete file:///tmp/delete-markers.json > /dev/null 2>&1 || echo "   ⚠️  Some delete markers could not be removed"
           fi
           
           # Step 2: Delete all current objects
           echo "   📦 Deleting all current objects..."
-          aws s3 rm "s3://$bucket" --recursive --quiet || echo "   ⚠️  Some objects could not be deleted"
+          aws s3 rm "s3://$bucket" --recursive > /dev/null 2>&1 || echo "   ⚠️  Some objects could not be deleted"
           
           # Step 3: Delete the bucket itself
           echo "   🗑️  Deleting bucket..."
